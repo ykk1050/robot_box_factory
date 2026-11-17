@@ -8,18 +8,21 @@ const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h 
 export function boxPicture(dims, size = 150) {
   const [w, hh, d] = dims;
   const k = 0.55, a = (35 * Math.PI) / 180, dx = d * k * Math.cos(a), dy = d * k * Math.sin(a);
-  const m = Math.max(w, hh, d) * 0.38;
-  const svg = S('svg', { viewBox: `${-m} ${-dy - m * 0.6} ${w + dx + m * 2} ${hh + dy + m * 1.8}`, width: size, height: size * 0.72 });
+  // 글자 크기를 먼저 정하고, 글자가 들어갈 여백을 넉넉히 잡는다(높이·세로 글자가 잘리지 않게)
+  const fs = Math.max(w, hh, d) * 0.2;
+  const label = (n) => fs * (2.0 + 0.62 * String(n).length); // "높이 4" 같은 글자의 대략 너비
+  const left = label(hh) + fs * 0.5, right = label(d) + fs * 0.6, top = fs * 0.6, bottom = fs * 1.7;
+  const vbW = left + w + dx + right, vbH = top + dy + hh + bottom;
+  const svg = S('svg', { viewBox: `${-left} ${-dy - top} ${vbW} ${vbH}`, width: size, height: Math.round(size * vbH / vbW) });
   const sw = Math.max(w, hh, d) * 0.03;
   const poly = (pts, fill) => svg.append(S('polygon', { points: pts.map((p) => p.join(',')).join(' '), fill, stroke: '#3b2a1e', 'stroke-width': sw, 'stroke-linejoin': 'round' }));
   poly([[0, 0], [w, 0], [w, hh], [0, hh]], '#f3e3c9');
   poly([[0, 0], [dx, -dy], [w + dx, -dy], [w, 0]], '#fbf0dc');
   poly([[w, 0], [w + dx, -dy], [w + dx, hh - dy], [w, hh]], '#e6d0ac');
-  const fs = Math.max(w, hh, d) * 0.2;
-  const txt = (x, y, t, col) => { const e = S('text', { x, y, 'font-size': fs, 'text-anchor': 'middle', fill: col, 'font-family': 'Jua, sans-serif' }); e.textContent = t; svg.append(e); };
+  const txt = (x, y, t, col, anchor = 'middle') => { const e = S('text', { x, y, 'font-size': fs, 'text-anchor': anchor, fill: col, 'font-family': 'Jua, sans-serif' }); e.textContent = t; svg.append(e); };
   txt(w / 2, hh + fs * 1.15, `가로 ${w}`, '#c0392b');
-  txt(-fs * 1.3, hh / 2 + fs * 0.3, `높이 ${hh}`, '#2f6fde');
-  txt(w + dx / 2 + fs * 1.6, hh - dy / 2 + fs * 0.9, `세로 ${d}`, '#2a9d55');
+  txt(-fs * 0.35, hh / 2 + fs * 0.35, `높이 ${hh}`, '#2f6fde', 'end');
+  txt(w + dx + fs * 0.3, hh - dy * 0.5 + fs * 0.35, `세로 ${d}`, '#2a9d55', 'start');
   return svg;
 }
 
