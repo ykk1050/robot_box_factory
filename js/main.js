@@ -1,7 +1,8 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
 import { ITEMS, CUSTOMERS, COST, dayConfig, UPGRADES, payFor } from './data.js';
 
-export const VERSION = 'v1.008'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
+// 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
+export const VERSION = window.BUILD || 'v1.009';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, STATIONS;
