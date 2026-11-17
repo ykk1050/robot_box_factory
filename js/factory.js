@@ -386,6 +386,34 @@ export class Factory {
     this.pivot.position.y = newHalf;
   }
 
+  // ---------- 손으로 굴리기 ----------
+  // dir: 'up'(멀리) 'down'(앞으로) 'left' 'right' — 지금 보는 방향 기준으로 상자를 90도 굴린다
+  async roll(dir) {
+    if (this.rolling || !this.pivot) return;
+    this.rolling = true;
+    const yaw = this.cam.yaw;
+    const f = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const r = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    const v = { up: f, down: f.clone().negate(), right: r, left: r.clone().negate() }[dir];
+    // 작업대와 나란하게: 가까운 축(x 또는 z)으로 맞춘다
+    const d = Math.abs(v.x) > Math.abs(v.z) ? new THREE.Vector3(Math.sign(v.x), 0, 0) : new THREE.Vector3(0, 0, Math.sign(v.z));
+    const axis = new THREE.Vector3(0, 1, 0).cross(d).normalize();
+    const q0 = this.pivot.quaternion.clone();
+    const q1 = new THREE.Quaternion().setFromAxisAngle(axis, Math.PI / 2).multiply(q0);
+    const m = new THREE.Matrix4().makeRotationFromQuaternion(q1).elements;
+    const dims = this.A.dims;
+    const hy = (Math.abs(m[1]) * dims[0] + Math.abs(m[5]) * dims[1] + Math.abs(m[9]) * dims[2]) / 2;
+    const y0 = this.pivot.position.y;
+    await this.animate(420, (t) => {
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      this.pivot.quaternion.slerpQuaternions(q0, q1, e);
+      this.pivot.position.y = y0 + (hy - y0) * e + Math.sin(t * Math.PI) * Math.max(...dims) * 0.2;
+    });
+    this.pivot.quaternion.copy(q1);
+    this.pivot.position.y = hy;
+    this.rolling = false;
+  }
+
   // ---------- 라벨 ----------
   setupFaces() {
     const { mn, mx } = this.A.bbox;

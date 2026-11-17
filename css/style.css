@@ -155,6 +155,16 @@ button { font: inherit; color: inherit; }
 .float.minus { color: var(--red); font-size: 22px; }
 @keyframes floatUp { from { transform: translate(-50%, 30px); opacity: 0; } 15% { opacity: 1; } to { transform: translate(-50%, -30px); opacity: 0; } }
 
+/* 상자 굴리기 버튼 */
+.rollpad { position: absolute; left: 16px; bottom: 96px; z-index: 6; display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 52px); gap: 4px; align-items: center; justify-items: center; }
+.rbtn { width: 60px; height: 52px; border-radius: 14px; border: 2px solid var(--teal-d); background: #fffaf1f2; color: var(--teal-d); font-size: 24px; cursor: pointer; box-shadow: 0 3px 0 var(--teal-d); }
+.rbtn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--teal-d); }
+.r-up { grid-column: 2; grid-row: 1; }
+.r-left { grid-column: 1; grid-row: 2; }
+.r-right { grid-column: 3; grid-row: 2; }
+.r-down { grid-column: 2; grid-row: 3; }
+.rmid { grid-column: 2; grid-row: 2; font-family: "Jua", sans-serif; font-size: 13px; line-height: 1.2; text-align: center; color: #fff; text-shadow: 0 1px 2px #000a; }
+
 /* 좁은 화면(태블릿 세로·휴대폰) */
 @media (max-width: 900px) {
   .tickets { top: 58px; left: 8px; right: 8px; width: auto; flex-direction: row; overflow-x: auto; }
@@ -162,6 +172,8 @@ button { font: inherit; color: inherit; }
   .side { top: auto; bottom: 84px; left: 8px; right: 8px; width: auto; max-height: 34%; }
   .cutter { top: 150px; left: 4px; right: 4px; bottom: calc(34% + 92px); }
   .ocard svg { display: none; }
+  .rollpad { left: auto; right: 8px; bottom: calc(34% + 92px); grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(3, 44px); }
+  .rbtn { width: 48px; height: 44px; font-size: 20px; }
   .hud .pill { font-size: 14px; padding: 4px 8px; }
   .robot img { width: 44px; height: 44px; }
   .bubble { font-size: 14px; }

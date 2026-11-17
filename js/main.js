@@ -3,7 +3,7 @@ import { ITEMS, CUSTOMERS, dayConfig, UPGRADES, payFor } from './data.js';
 import { analyzeNet } from './net.js';
 import { Cutter, boxPicture } from './cutter.js';
 
-export const VERSION = 'v1.002'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
+export const VERSION = 'v1.003'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
 
 // ---------- 저장 ----------
 const SAVE_KEY = 'robot-box-factory-v2';
@@ -119,7 +119,12 @@ async function playDay(n) {
   const robot = h('footer', { class: 'robot' }, h('img', { src: 'img/robot.webp', alt: '박스봇' }), bubble);
   const cutWrap = h('div', { class: 'cutter hidden' });
   const fx = h('div', { class: 'fx' });
-  const root = h('div', { class: 'screen play' }, gl, hud, tickets, side, cutWrap, robot, fx);
+  const rollBtn = (dir, label, aria) => h('button', { class: 'rbtn r-' + dir, 'aria-label': aria, onclick: () => { if (F.rolling) return; sfx('thud'); F.roll(dir); } }, label);
+  const rollPad = h('div', { class: 'rollpad hidden' },
+    rollBtn('up', '▲', '상자를 멀리 굴리기'), rollBtn('left', '◀', '상자를 왼쪽으로 굴리기'),
+    h('span', { class: 'rmid' }, '상자', h('br'), '굴리기'),
+    rollBtn('right', '▶', '상자를 오른쪽으로 굴리기'), rollBtn('down', '▼', '상자를 앞으로 굴리기'));
+  const root = h('div', { class: 'screen play' }, gl, hud, tickets, side, cutWrap, rollPad, robot, fx);
   app.append(root);
   const F = new Factory(gl);
   F.view('wide');
@@ -281,6 +286,7 @@ async function playDay(n) {
   // ---------- 단계: 테이프 ----------
   function startTape() {
     step = 'tape';
+    rollPad.classList.remove('hidden');
     const edges = F.setupTape();
     const seams = edges.filter((e) => !e.hinge);
     const taped = new Set();
@@ -288,7 +294,7 @@ async function playDay(n) {
     const cnt = h('b', {}, '0');
     setSide(stepsBar('tape'), orderCard(active),
       h('p', { class: 'hint' }, '잘라서 맞닿은 모서리는 벌어져 있어요. 그 모서리를 눌러 테이프를 붙여요. 접혀서 이어진 모서리는 붙일 필요가 없어요.'),
-      h('p', { class: 'hint' }, '👆 화면을 끌면 상자를 돌려 볼 수 있어요.'),
+      h('p', { class: 'hint' }, '👆 화면을 끌면 둘러볼 수 있어요. 바닥에 닿은 쪽은 ◀ ▶ ▲ ▼ 버튼으로 상자를 굴려서 봐요.'),
       h('p', { class: 'big-num' }, '붙인 테이프 ', cnt, '줄'),
       h('button', { class: 'btn big', onclick: () => {
         sfx('click');
@@ -314,6 +320,7 @@ async function playDay(n) {
   // ---------- 단계: 굴러 넘어짐 → 라벨 ----------
   async function startTumble() {
     step = 'tumble';
+    rollPad.classList.add('hidden');
     F.allowRotate = false;
     F.view('work');
     await new Promise((r) => setTimeout(r, 700));
@@ -327,6 +334,7 @@ async function playDay(n) {
 
   function startLabel() {
     step = 'label';
+    rollPad.classList.remove('hidden');
     F.allowRotate = true;
     const faces = F.setupFaces();
     const placed = new Set();
@@ -340,7 +348,7 @@ async function playDay(n) {
       status.textContent = `송장 ${labelDone ? '✔' : '0/1'} · 화살표 ${arrows}장`;
     }
     setSide(stepsBar('label'), orderCard(active),
-      h('p', { class: 'hint' }, '파란 "밑면" 도장이 찍힌 면이 상자의 밑면이에요.'),
+      h('p', { class: 'hint' }, '파란 "밑면" 도장이 찍힌 면이 상자의 밑면이에요. 바닥에 깔린 면은 ◀ ▶ ▲ ▼ 버튼으로 상자를 굴려서 찾아요.'),
       h('p', { class: 'hint' }, '📄 송장은 밑면과 평행한 윗면에, ⬆️ 화살표는 밑면과 수직인 옆면마다 붙여요.'),
       h('div', { class: 'row wrap' }, btnLabel, btnArrow), status,
       h('button', { class: 'btn big', onclick: () => {
@@ -377,6 +385,7 @@ async function playDay(n) {
   // ---------- 단계: 출고 ----------
   function startShip() {
     step = 'ship';
+    rollPad.classList.add('hidden');
     F.allowRotate = false;
     F.onTap = null;
     const btn = h('button', { class: 'btn big warn', onclick: async () => {
@@ -412,6 +421,7 @@ async function playDay(n) {
 
   function cancelActive(reason) {
     if (!active) return;
+    rollPad.classList.add('hidden');
     orders = orders.filter((x) => x !== active);
     active = null;
     step = 'pick';
@@ -463,6 +473,7 @@ async function playDay(n) {
     if (over) return;
     over = true;
     clearInterval(timer);
+    rollPad.classList.add('hidden');
     cutWrap.classList.add('hidden');
     F.onTap = null; F.allowRotate = false;
     F.clearWork();
