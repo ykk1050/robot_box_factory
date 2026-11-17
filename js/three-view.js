@@ -6,7 +6,7 @@ export const CARD = 0xd9a46a;       // 골판지 색
 export const INK = 0x3b2a1e;
 
 let sharedRenderer = null;
-function getRenderer() {
+export function getRenderer() {
   if (!sharedRenderer) {
     sharedRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     sharedRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));

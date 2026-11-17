@@ -1,6 +1,6 @@
 // 전개도 계산: 직사각형 조각들을 접는 선(같은 길이로 맞닿은 변)으로 이어 접고,
 // 정확한 정수 계산으로 상자가 되는지 판단한다. 3D 접기 애니메이션도 여기서.
-import { View, THREE, CARD, INK, VL } from './three-view.js';
+import { THREE, CARD, INK } from './three-view.js';
 
 const ROT = {
   '+x': [[0, -1, 0], [1, 0, 0], [0, 0, 1]],
@@ -227,91 +227,82 @@ export function netLines(rects, A) {
   return { fold, cut };
 }
 
-// ---------- 3D 접기 ----------
-export class FoldView extends View {
-  constructor(container, rects, A, opts = {}) {
-    super(container, { yaw: -0.5, pitch: 0.75, ...opts });
-    this.rects = rects; this.A = A;
-    this.content = new THREE.Group();
-    this.root.add(this.content);
-    this.nodes = []; this.meshes = [];
-    const H = (i) => (i === A.root || A.parent[i] < 0 ? [0, 0, 0] : A.hinges[A.via[i]].H);
-    const order = [...A.order, ...A.apart];
-    for (const i of order) {
-      const node = new THREE.Object3D();
-      const r = rects[i];
-      const hi = A.T[i] ? H(i) : [0, 0, 0];
-      if (A.parent[i] >= 0) {
-        const hp = H(A.parent[i]);
-        node.position.set(hi[0] - hp[0], 0, hi[2] - hp[2]);
-        this.nodes[A.parent[i]].add(node);
-      } else this.content.add(node);
-      const shade = new THREE.Color(CARD).offsetHSL(0, 0, ((i * 37) % 7 - 3) * 0.012);
-      const g = new THREE.PlaneGeometry(r.w, r.h);
-      g.rotateX(-Math.PI / 2);
-      const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: shade, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, transparent: true, opacity: A.T[i] ? 1 : 0.55 }));
-      mesh.userData.base = shade.getHex();
-      mesh.position.set(r.x + r.w / 2 - hi[0], 0, r.y + r.h / 2 - hi[2]);
-      const ed = new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: INK }));
-      mesh.add(ed);
-      node.add(mesh);
-      this.nodes[i] = node; this.meshes[i] = mesh;
-    }
-    const xs = rects.flatMap((r) => [r.x, r.x + r.w]), zs = rects.flatMap((r) => [r.y, r.y + r.h]);
-    this.flatCenter = [(Math.min(...xs) + Math.max(...xs)) / 2, 0, (Math.min(...zs) + Math.max(...zs)) / 2];
-    const flatR = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) / 2;
-    this.boxCenter = A.center || this.flatCenter;
-    this.fit(Math.max(flatR, 2) * 1.05);
-    this.marks = new THREE.Group();
-    this.content.add(this.marks);
-    this.setFold(0);
-  }
-
-  setFold(t) {
-    this.t = t;
-    const th = t * Math.PI / 2;
-    this.A.order.forEach((i) => {
-      if (this.A.parent[i] < 0) return;
-      const s = this.A.side[i];
-      const node = this.nodes[i];
-      node.rotation.set(0, 0, 0);
-      if (s === '+x') node.rotation.z = th;
-      else if (s === '-x') node.rotation.z = -th;
-      else if (s === '+z') node.rotation.x = -th;
-      else node.rotation.x = th;
-    });
-    const c = this.flatCenter.map((v, k) => v + (this.boxCenter[k] - v) * t);
-    this.content.position.set(-c[0], -c[1], -c[2]);
-  }
-
-  fold(ms = 1600, to = 1) {
-    const from = this.t;
-    return this.animate(ms, (k) => {
-      const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      this.setFold(from + (to - from) * e);
-    });
-  }
-
-  tint(i, color) { this.meshes[i].material.color.set(color ?? this.meshes[i].userData.base); }
-
-  markSeg(p3a, p3b, color, r = 0.07) {
-    const a = new THREE.Vector3(...p3a), b = new THREE.Vector3(...p3b);
-    const len = a.distanceTo(b);
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), new THREE.MeshBasicMaterial({ color }));
-    m.position.copy(a).add(b).multiplyScalar(0.5);
-    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
-    this.marks.add(m);
-    return m;
-  }
-
-  markPoint(p3, color, r = 0.16, label = null) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), new THREE.MeshBasicMaterial({ color }));
-    m.position.set(...p3);
-    this.marks.add(m);
-    return m;
-  }
-
-  unmark(m) { if (m) { this.marks.remove(m); m.geometry.dispose(); m.material.dispose(); } }
+// ---------- 3D 접기 장치 ----------
+// 분석 좌표(1 = 1cm 칸) 그대로 만든다. 밑면(root)은 y=0, 상자는 y>=0 쪽으로 접힌다.
+function cardTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#d9a46a'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#c9925a';
+  for (let x = 0; x < 64; x += 8) g.fillRect(x, 0, 3, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
 }
 
-export { VL };
+export function makeFoldRig(rects, A) {
+  const group = new THREE.Group();
+  const nodes = [], meshes = [];
+  const H = (i) => (A.parent[i] < 0 ? [0, 0, 0] : A.hinges[A.via[i]].H);
+  const tex = cardTexture();
+  for (const i of [...A.order, ...A.apart]) {
+    const node = new THREE.Object3D();
+    const r = rects[i];
+    const hi = A.T[i] ? H(i) : [0, 0, 0];
+    if (A.parent[i] >= 0) {
+      const hp = H(A.parent[i]);
+      node.position.set(hi[0] - hp[0], 0, hi[2] - hp[2]);
+      nodes[A.parent[i]].add(node);
+    } else group.add(node);
+    const g = new THREE.PlaneGeometry(r.w, r.h);
+    g.rotateX(-Math.PI / 2);
+    const t = tex.clone();
+    t.repeat.set(r.w / 2, r.h / 2);
+    t.needsUpdate = true;
+    const mat = new THREE.MeshLambertMaterial({ map: t, color: 0xffffff, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.position.set(r.x + r.w / 2 - hi[0], 0, r.y + r.h / 2 - hi[2]);
+    mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0x6b4423 })));
+    node.add(mesh);
+    nodes[i] = node; meshes[i] = mesh;
+  }
+  function setFold(t) {
+    const th = t * Math.PI / 2;
+    A.order.forEach((i) => {
+      if (A.parent[i] < 0) return;
+      const n = nodes[i];
+      n.rotation.set(0, 0, 0);
+      const s = A.side[i];
+      if (s === '+x') n.rotation.z = th; else if (s === '-x') n.rotation.z = -th;
+      else if (s === '+z') n.rotation.x = -th; else n.rotation.x = th;
+    });
+  }
+  function tint(i, color) { meshes[i].material.color.set(color ?? 0xffffff); }
+  setFold(0);
+  return { group, nodes, meshes, setFold, tint };
+}
+
+export function applyT(T, v) { return add(mv(T.M, v), T.t); }
+
+// 접은 상자의 모서리 12개: 접힌 모서리(hinge)인지 잘린 모서리(seam)인지
+export function boxEdges(A) {
+  const { mn, mx } = A.bbox;
+  const C = [];
+  for (const x of [mn[0], mx[0]]) for (const y of [mn[1], mx[1]]) for (const z of [mn[2], mx[2]]) C.push([x, y, z]);
+  const edges = [];
+  for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
+    const diff = [0, 1, 2].filter((k) => C[i][k] !== C[j][k]);
+    if (diff.length === 1) edges.push({ a: C[i], b: C[j], axis: diff[0] });
+  }
+  const hingeKeys = new Set();
+  A.hinges.forEach((h) => {
+    if (!A.T[h.a] || !A.T[h.b]) return;
+    if (A.parent[h.b] !== h.a && A.parent[h.a] !== h.b) return; // 실제로 접힌 선만
+    const p = applyT(A.T[h.a], [h.p[0], 0, h.p[1]]), q = applyT(A.T[h.a], [h.q[0], 0, h.q[1]]);
+    hingeKeys.add([key3(p), key3(q)].sort().join('|'));
+  });
+  edges.forEach((e, i) => { e.id = i; e.hinge = hingeKeys.has([key3(e.a), key3(e.b)].sort().join('|')); });
+  return edges;
+}

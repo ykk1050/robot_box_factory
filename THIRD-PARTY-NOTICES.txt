@@ -7,7 +7,10 @@
 3D 모델 (Polyfork) — CC BY 4.0
 ==============================================================================
 Rooted gantry arm by Polyfork (https://polyfork.dev/asset/rooted-gantry-arm-f35c8f), CC BY 4.0
-바꾼 것: Blender로 투명 배경 그림(img/robot.webp)으로 렌더링해서 사용했습니다.
+Delivery Truck by Polyfork (https://polyfork.dev/asset/delivery-truck-a9537e), CC BY 4.0
+Timber EUR Pallet by Polyfork (https://polyfork.dev/asset/timber-eur-pallet-a1f655), CC BY 4.0
+Material Pallet by Polyfork (https://polyfork.dev/asset/material-pallet-6af263), CC BY 4.0
+바꾼 것: 모델 파일(models/*.glb)은 그대로 쓰고, 로봇 팔은 Blender로 투명 배경 그림(img/robot.webp)으로도 렌더링해서 사용했습니다.
 라이선스: https://creativecommons.org/licenses/by/4.0/
 이 게임은 Polyfork가 만들거나 추천한 것이 아닙니다.
 
@@ -20,7 +23,7 @@ RPG Audio(cloth1, cloth4), Sci-fi Sounds(forceField_001), Music Jingles(jingles_
 라이선스: https://creativecommons.org/publicdomain/zero/1.0/
 
 ==============================================================================
-three.js r187 (vendor/three.module.js, vendor/three.core.js) — MIT License
+three.js r187 (vendor/three.module.js, vendor/three.core.js, vendor/addons/: GLTFLoader, BufferGeometryUtils, SkeletonUtils) — MIT License
 ==============================================================================
 The MIT License
 
