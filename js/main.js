@@ -1,7 +1,7 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
 import { ITEMS, CUSTOMERS, COST, dayConfig, UPGRADES, payFor } from './data.js';
 
-export const VERSION = 'v1.007'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
+export const VERSION = 'v1.008'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, STATIONS;
@@ -273,7 +273,7 @@ async function playDay(n) {
     orderPin.append(...[
       h('div', { class: 'row' }, h('span', { class: 'temoji big' }, o.item.emoji), h('div', { class: 'pname' }, h('b', {}, o.item.name), h('small', {}, o.cust)), h('span', { class: 'pay' }, won(o.pay))),
       boxPicture(o.item.d, 210),
-      o.item.fragile ? h('p', { class: 'fragile' }, '🛡 깨지기 쉬워요! 꼭짓점마다 모서리 보호대') : null,
+      o.item.fragile ? h('p', { class: 'fragile' }, '🛡 깨지기 쉬워요! 꼭짓점 8개마다 꼭짓점 보호대') : null,
       h('span', { class: 'pat' }, o.pinBar)].filter(Boolean));
     orderPin.classList.remove('hidden');
   }
@@ -320,15 +320,15 @@ async function playDay(n) {
     cutter = new Cutter(host, {
       onChange: (k, r) => {
         if (k === 'overlap') say('다른 면과 겹치게 그릴 수 없어요.');
-        else if (k === 'add') { sfx('click'); say(`${r.w}×${r.h} 면을 그렸어요. 그린 면을 한 번 누르면 지워져요.`); }
+        else if (k === 'add') { sfx('click'); say(`${r.w === r.h ? `한 변이 ${r.w}cm인 정사각형` : `가로 ${r.w}cm, 세로 ${r.h}cm인 직사각형`} 면을 그렸어요. 그린 면을 한 번 누르면 지워져요.`); }
         else sfx('click');
       },
     });
     if (keep) cutter.set(keep);
-    setSide(h('p', { class: 'hint' }, '주문서의 상자와 딱 맞는 전개도를 그려요. 면끼리 맞닿은 곳은 접는 선(점선)이 돼요.'), invView());
+    setSide(h('p', { class: 'hint' }, `주문서의 ${new Set(o.item.d).size === 1 ? '정육면체' : '직육면체'}와 크기가 같은 전개도를 그려요. 잘리지 않은 모서리는 점선, 잘린 모서리는 실선으로 나타나요.`), invView());
     if (keep) return;
-    if (o.item === ITEMS.puzzle && n === 1 && done === 0) say('큐브 퍼즐은 가로·세로·높이가 모두 2cm예요. 2×2 정사각형 면을 이어 붙여 상자 전개도를 그려 봐요!');
-    else say(`가로 ${o.item.d[0]}, 세로 ${o.item.d[2]}, 높이 ${o.item.d[1]}cm 상자의 전개도를 그려요.`);
+    if (o.item === ITEMS.puzzle && n === 1 && done === 0) say('큐브 퍼즐은 가로·세로·높이가 모두 2cm인 정육면체에 넣어요. 한 변이 2cm인 정사각형 6개로 정육면체의 전개도를 그려 봐요!');
+    else say(`가로 ${o.item.d[0]}cm, 세로 ${o.item.d[2]}cm, 높이 ${o.item.d[1]}cm인 ${new Set(o.item.d).size === 1 ? '정육면체' : '직육면체'}의 전개도를 그려요.`);
   }
 
   async function doCut() {
@@ -338,7 +338,7 @@ async function playDay(n) {
     const A = analyzeNet(rects, active.item.d);
     if (A.problem === 'apart') {
       cutter.red = new Set(A.apart); cutter.draw();
-      oops('빨간 면이 떨어져 있어요! 이웃한 면과 같은 길이의 모서리로 딱 맞닿아야 접을 수 있어요.');
+      oops('빨간 면이 떨어져 있어요! 전개도의 면은 길이가 같은 모서리끼리 이어져 있어야 접을 수 있어요.');
       return;
     }
     place = 'busy';
@@ -350,7 +350,7 @@ async function playDay(n) {
     setSide(h('p', { class: 'hint' }, '골판지를 접는 중…'));
     const fast = save.up.fast ? 0.5 : 1;
     const good = A.valid && !A.problem;
-    say(good ? '뚜껑만 남기고 접어요!' : '접어 볼게요…');
+    say(good ? '밑면과 평행한 면 하나만 열어 두고 접어요!' : '접어 볼게요…');
     await F.fold(1500 * fast, good);
     if (!active || over) return;
     if (good) {
@@ -360,11 +360,11 @@ async function playDay(n) {
       if (!active || over) return;
     }
     let fail = null;
-    if (A.problem === 'overlap') { F.tintFaces([...new Set(A.overlaps.flat())], 0xff8a7a); fail = '빨간 면끼리 겹쳐요! 한쪽에는 면이 두 장, 다른 쪽에는 구멍이 생겼어요.'; }
-    else if (A.problem === 'hole') fail = `면이 ${A.n}개뿐이라 구멍이 뚫렸어요. 상자는 면이 6개 있어야 닫혀요.`;
-    else if (A.problem === 'extra') fail = `면이 ${A.n}개라 남는 면이 생겼어요. 상자의 면은 6개예요.`;
-    else if (A.problem === 'misfit') { F.tintFaces(A.misfit, 0xff8a7a); fail = '틈이 벌어지거나 튀어나왔어요. 마주 보는 면은 크기가 같고, 맞닿는 모서리는 길이가 같아야 해요.'; }
-    else if (!F.itemFits) fail = `상자가 작아서 ${active.item.name}이(가) 안 들어가요! 상자 크기 ${A.dims.join('×')}를 다시 확인해요.`;
+    if (A.problem === 'overlap') { F.tintFaces([...new Set(A.overlaps.flat())], 0xff8a7a); fail = '빨간 면끼리 겹쳐요! 접었을 때 겹치는 면이 있으면 직육면체의 전개도가 될 수 없어요.'; }
+    else if (A.problem === 'hole') fail = `면이 ${A.n}개뿐이라 빈 곳이 생겼어요. 직육면체는 면이 6개예요.`;
+    else if (A.problem === 'extra') fail = `면이 ${A.n}개라 남는 면이 생겼어요. 직육면체의 면은 6개예요.`;
+    else if (A.problem === 'misfit') { F.tintFaces(A.misfit, 0xff8a7a); fail = '빨간 면이 맞지 않아요! 직육면체에서 서로 평행한 면은 모양과 크기가 같고, 접었을 때 겹치는 모서리는 길이가 같아야 해요.'; }
+    else if (!F.itemFits) fail = `직육면체가 작아서 ${active.item.name}이(가) 안 들어가요! 접어 보니 가로 ${A.dims[0]}cm, 세로 ${A.dims[2]}cm, 높이 ${A.dims[1]}cm예요. 주문서의 길이와 비교해요.`;
     if (fail) {
       oops(fail + ' (골판지 버림)', 300);
       place = 'cut';
@@ -377,10 +377,10 @@ async function playDay(n) {
     if (save.up.die) { save.dies[[...active.item.d].sort((a, b) => a - b).join('x')] = rects; store(); }
     active.loose = F.itemLoose;
     active.phase = 'packing';
-    if (F.itemLoose) say('상자는 닫혔는데 물건보다 커서 흔들려요. 완충재 값이 들어요.', 'sad');
+    if (F.itemLoose) say('직육면체는 만들어졌는데 물건보다 커서 흔들려요. 완충재 값이 들어요.', 'sad');
     await new Promise((r) => setTimeout(r, 900));
     if (!active || over) return;
-    say('앗! 작업대에 내려놓다가 상자가 데굴 굴렀어요! 파란 "밑면" 도장이 어디로 갔는지 봐요.', 'sad');
+    say('앗! 작업대에 내려놓다가 상자가 데굴 굴렀어요! 물건을 올려 두었던 밑면에 파란 "밑면" 도장이 있어요. 어디로 갔는지 찾아봐요.', 'sad');
     sfx('thud');
     await F.tumble(Math.floor(Math.random() * 5));
     if (!active || over) return;
@@ -425,10 +425,10 @@ async function playDay(n) {
   }
 
   function hintTool() {
-    if (tool === 'tape') say('테이프를 붙일 모서리를 눌러요. 모서리 길이와 같은 테이프가 필요해요.');
-    else if (tool === 'guard') say('보호대를 끼울 꼭짓점을 눌러요.');
-    else if (tool === 'base') say('밑면 스티커(송장)는 밑면에 붙여요. 파란 "밑면" 도장이 찍힌 면과, 그 면과 평행한 면이 밑면이에요.');
-    else if (tool === 'side') say('옆면 스티커는 밑면과 수직으로 만나는 옆면에 붙여요.');
+    if (tool === 'tape') say('테이프를 붙일 모서리를 눌러요. 모서리는 면과 면이 만나는 선분이에요. 그 모서리의 길이와 같은 테이프가 필요해요.');
+    else if (tool === 'guard') say('보호대를 끼울 꼭짓점을 눌러요. 꼭짓점은 모서리와 모서리가 만나는 점이에요.');
+    else if (tool === 'base') say('밑면 스티커(송장)는 밑면에 붙여요. 직육면체에서 서로 평행한 두 면이 밑면이에요. 파란 "밑면" 도장이 찍힌 면과, 그 면과 평행한 면을 찾아요.');
+    else if (tool === 'side') say('옆면 스티커는 옆면에 붙여요. 옆면은 밑면과 만나는 면이고, 밑면과 수직이에요.');
   }
 
   function useTool(hit) {
@@ -459,7 +459,7 @@ async function playDay(n) {
       if ((want ? inv.base : inv.side) <= 0) { say(`${want ? '밑면' : '옆면'} 스티커가 없어요. 스티커 제작기에서 만들어 와요.`, 'sad'); sfx('no'); return; }
       if (want) inv.base--; else inv.side--;
       if (want !== isBase) {
-        oops(want ? '이 면은 옆면이에요! 밑면은 파란 도장이 찍힌 면과, 그 면과 평행한 면이에요. (스티커 버림)' : '이 면은 밑면이에요! 옆면은 밑면과 수직으로 만나는 면이에요. (스티커 버림)', 0);
+        oops(want ? '이 면은 밑면과 수직인 옆면이에요! 밑면은 파란 도장이 찍힌 면과, 그 면과 평행한 면이에요. (스티커 버림)' : '이 면은 밑면이에요! 옆면은 밑면과 만나는 면으로, 밑면과 수직이에요. (스티커 버림)', 0);
         drawWorkSide();
         return;
       }
@@ -478,7 +478,7 @@ async function playDay(n) {
     if (o.item.fragile && o.guarded.size < 8) miss.push('보호대가 없는 꼭짓점');
     if (o.baseS.size < 2) miss.push('스티커가 없는 밑면');
     if (o.sideS.size < 4) miss.push('스티커가 없는 옆면');
-    if (miss.length) { oops(`검수 불합격! 아직 ${miss.join(', ')}이(가) 있어요. 상자를 굴려 가며 빠짐없이 봐요.`, 0); return; }
+    if (miss.length) { oops(`검수 불합격! 아직 ${miss.join(', ')}이(가) 있어요. 직육면체의 면·모서리·꼭짓점이 모두 몇 개인지 생각하며 상자를 굴려 봐요.`, 0); return; }
     ship();
   }
 
@@ -526,7 +526,7 @@ async function playDay(n) {
       const rows = [{ len: 2, cnt: 0 }, { len: 3, cnt: 0 }, { len: 4, cnt: 0 }];
       const sum = h('p', { class: 'sum' });
       const upd = () => { const L = rows.reduce((s, r) => s + r.len * r.cnt, 0), C = rows.reduce((s, r) => s + r.cnt, 0); sum.textContent = `테이프 ${C}줄 · 모두 ${L}cm · 재료 값 ${won(L * COST.tape)}`; };
-      panel.append(h('h3', {}, '🩹 테이프 출력기'), h('p', { class: 'hint' }, `모서리에 붙일 테이프의 길이와 개수를 넣으면 잘라서 나와요. (1cm에 ${won(COST.tape)})`),
+      panel.append(h('h3', {}, '🩹 테이프 출력기'), h('p', { class: 'hint' }, `직육면체의 모서리에 붙일 테이프의 길이와 개수를 넣으면 잘라서 나와요. 길이가 같은 모서리가 몇 개씩인지 세어 봐요. (1cm에 ${won(COST.tape)})`),
         ...rows.map((r) => h('div', { class: 'srow' }, h('span', {}, '길이'), stepper(r.len, 1, 9, (v) => { r.len = v; upd(); }, 'cm'), h('span', {}, '개수'), stepper(r.cnt, 0, 12, (v) => { r.cnt = v; upd(); }, '줄'))),
         sum,
         h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
@@ -542,7 +542,7 @@ async function playDay(n) {
       let b = 0, s = 0;
       const sum = h('p', { class: 'sum' });
       const upd = () => { sum.textContent = `재료 값 ${won((b + s) * COST.sticker)}`; };
-      panel.append(h('h3', {}, '🏷 스티커 제작기'), h('p', { class: 'hint' }, `📄 밑면 스티커는 송장, 🏷 옆면 스티커는 "취급주의"예요. (1장에 ${won(COST.sticker)})`),
+      panel.append(h('h3', {}, '🏷 스티커 제작기'), h('p', { class: 'hint' }, `📄 밑면 스티커(송장)는 밑면마다, 🏷 옆면 스티커(취급주의)는 옆면마다 붙여요. 밑면과 옆면은 각각 몇 개일까요? (1장에 ${won(COST.sticker)})`),
         h('div', { class: 'srow' }, h('span', {}, '📄 밑면 스티커'), stepper(0, 0, 12, (v) => { b = v; upd(); }, '장')),
         h('div', { class: 'srow' }, h('span', {}, '🏷 옆면 스티커'), stepper(0, 0, 12, (v) => { s = v; upd(); }, '장')),
         sum,
@@ -558,8 +558,8 @@ async function playDay(n) {
       let g = 0;
       const sum = h('p', { class: 'sum' });
       const upd = () => { sum.textContent = `재료 값 ${won(g * COST.guard)}`; };
-      panel.append(h('h3', {}, '🛡 보호대 선반'), h('p', { class: 'hint' }, `깨지기 쉬운 물건의 상자에는 꼭짓점마다 모서리 보호대를 끼워요. (1개에 ${won(COST.guard)})`),
-        h('div', { class: 'srow' }, h('span', {}, '🛡 모서리 보호대'), stepper(0, 0, 16, (v) => { g = v; upd(); }, '개')),
+      panel.append(h('h3', {}, '🛡 보호대 선반'), h('p', { class: 'hint' }, `깨지기 쉬운 물건이 든 직육면체에는 꼭짓점마다 꼭짓점 보호대를 끼워요. (1개에 ${won(COST.guard)})`),
+        h('div', { class: 'srow' }, h('span', {}, '🛡 꼭짓점 보호대'), stepper(0, 0, 16, (v) => { g = v; upd(); }, '개')),
         sum,
         h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
           if (!g) { say('몇 개 가져갈지 넣어요.'); return; }
@@ -578,8 +578,8 @@ async function playDay(n) {
     if (place === 'work') { drawWorkSide(); return; }
     const o = active;
     const tip = !o ? '📋 왼쪽 주문 쪽지를 골라요. 손님이 너무 오래 기다리면 취소해요!'
-      : o.phase === 'cut' ? '🧰 작업대로 가서 상자 전개도를 재단해요.'
-        : '🧰 재료를 챙겼으면 작업대로 가서 상자에 붙여요.';
+      : o.phase === 'cut' ? '🧰 작업대로 가서 직육면체의 전개도를 재단해요.'
+        : '🧰 재료를 챙겼으면 작업대로 가서 직육면체의 모서리·꼭짓점·면에 붙여요.';
     setSide(h('p', { class: 'hint' }, tip),
       h('p', { class: 'hint' }, '👆 바닥이나 기계를 톡 누르면 걸어가요. 아래 버튼으로도 갈 수 있어요.'),
       invView());
