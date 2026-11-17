@@ -2,7 +2,7 @@
 import { ITEMS, CUSTOMERS, COST, dayConfig, UPGRADES, payFor } from './data.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.010';
+export const VERSION = window.BUILD || 'v1.011';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, STATIONS;

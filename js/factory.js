@@ -753,7 +753,19 @@ export class Factory {
     if (!this.truck) return;
     await this.closeDoor();
     const s = this.truck.position.clone();
-    await this.animate(2200, (t) => { this.truck.position.z = s.z + t * t * 14; });
+    // 트럭이 바라보는 앞쪽(운전석 쪽)으로 달린다. 바퀴도 굴러간다.
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.truck.quaternion).setY(0).normalize();
+    const wheels = [];
+    this.truck.traverse((o) => { if (/^wheel-/.test(o.name)) wheels.push(o); });
+    this.follow = false;
+    const camStart = this.goal.target.clone();
+    await this.animate(2600, (t) => {
+      const d = t * t * 16;
+      this.truck.position.copy(s).addScaledVector(fwd, d);
+      wheels.forEach((w) => { w.rotation.x = d / 0.5; });
+      // 카메라가 떠나는 트럭을 조금 따라간다
+      this.goal.target.copy(camStart).addScaledVector(fwd, Math.min(d, 6) * 0.6);
+    });
   }
 
   dispose() {
