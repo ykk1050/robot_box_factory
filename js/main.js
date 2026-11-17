@@ -1,7 +1,7 @@
 // 로봇 상자 공장 — 화면 흐름, 저장, 소리, 로봇 말풍선
 import { DAYS } from './levels.js';
 
-export const VERSION = 'v1.000'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
+export const VERSION = 'v1.001'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
 
 // 작업장은 필요할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 const STATIONS = {

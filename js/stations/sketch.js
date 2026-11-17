@@ -32,8 +32,23 @@ export default function runSketch(stage, spec, ctx) {
     const u = Math.max(w, hh, d) / 10; // 선 굵기 단위
     const svg = S('svg', { viewBox: vb.join(' '), preserveAspectRatio: 'xMidYMid meet' });
     board.append(svg);
-    const gLines = S('g'), gHits = S('g'), gDots = S('g');
-    svg.append(gLines, gHits, gDots);
+    const gLabels = S('g'), gLines = S('g'), gHits = S('g'), gDots = S('g');
+    gLabels.style.pointerEvents = 'none';
+    svg.append(gLabels, gLines, gHits, gDots);
+    // 기호는 모서리와 가장 멀리 떨어진 방향에 둔다(선을 가리지 않게)
+    const cxy = [P.reduce((a, p) => a + p[0], 0) / 8, P.reduce((a, p) => a + p[1], 0) / 8];
+    const labelPos = P.map(([x, y], i) => {
+      const dirs = edges.filter((e) => e.includes(i)).map(([a, b]) => { const j = a === i ? b : a; return Math.atan2(P[j][1] - y, P[j][0] - x); });
+      const out = Math.atan2(y - cxy[1], x - cxy[0]);
+      let best = out, score = -1;
+      for (let k = 0; k < 24; k++) {
+        const t = (k / 24) * Math.PI * 2;
+        const gap = Math.min(...dirs.map((d) => Math.abs(Math.atan2(Math.sin(t - d), Math.cos(t - d)))));
+        const sc = gap - 0.15 * Math.abs(Math.atan2(Math.sin(t - out), Math.cos(t - out)));
+        if (sc > score) { score = sc; best = t; }
+      }
+      return [x + Math.cos(best) * u * 0.95, y + Math.sin(best) * u * 0.95 + u * 0.28];
+    });
 
     const lines = new Map(); // key -> 'solid' | 'dashed'
     if (spec.preset === 'visible' || spec.preset === 'broken') edges.forEach(([a, b]) => { if (!isHiddenEdge([a, b])) lines.set(ek(a, b), 'solid'); });
@@ -47,7 +62,7 @@ export default function runSketch(stage, spec, ctx) {
     const flash = new Set();
 
     function draw() {
-      gLines.innerHTML = ''; gHits.innerHTML = ''; gDots.innerHTML = '';
+      gLabels.innerHTML = ''; gLines.innerHTML = ''; gHits.innerHTML = ''; gDots.innerHTML = '';
       for (const [key, st] of lines) {
         const [a, b] = key.split('-').map(Number);
         const l = S('line', { x1: P[a][0], y1: P[a][1], x2: P[b][0], y2: P[b][1], stroke: flash.has(key) ? '#d64545' : '#3b2a1e', 'stroke-width': u * (flash.has(key) ? 0.24 : 0.16), 'stroke-linecap': 'round' });
@@ -65,11 +80,11 @@ export default function runSketch(stage, spec, ctx) {
       P.forEach(([x, y], i) => {
         const g = S('g');
         g.style.cursor = 'pointer';
-        g.append(S('circle', { cx: x, cy: y, r: u * 0.9, fill: 'transparent' }));
+        g.append(S('circle', { cx: x, cy: y, r: u * 0.6, fill: 'transparent' }));
         g.append(S('circle', { cx: x, cy: y, r: u * (sel === i ? 0.42 : 0.3), fill: sel === i ? '#2f6fde' : '#fff', stroke: '#3b2a1e', 'stroke-width': u * 0.08 }));
-        const t = S('text', { x: x + u * 0.55, y: y - u * 0.45, 'font-size': u * 0.8, fill: '#7a6a58', 'font-family': 'Jua, sans-serif' });
+        const t = S('text', { x: labelPos[i][0], y: labelPos[i][1], 'font-size': u * 0.75, 'text-anchor': 'middle', fill: '#7a6a58', 'font-family': 'Jua, sans-serif' });
         t.textContent = VL[i];
-        g.append(t);
+        gLabels.append(t);
         g.addEventListener('pointerup', (e) => { e.stopPropagation(); tapDot(i); });
         gDots.append(g);
       });
