@@ -36,6 +36,15 @@ const STICKER = {
     g.font = '24px Jua, sans-serif'; g.fillText('받는 곳: ' + who, 16, 82);
     let x = 18; while (x < 238) { const w = 2 + ((x * 7) % 5); g.fillRect(x, 108, w, 64); x += w + 3 + ((x * 3) % 4); }
   }),
+  // 밑면 스티커: 창고에서 밑면끼리 맞닿게 쌓는다는 표시
+  stack: () => canvasTex(128, 128, (g) => {
+    g.fillStyle = '#eef6ff'; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = '#1f5fbf'; g.lineWidth = 7; g.strokeRect(5, 5, 118, 118);
+    g.fillStyle = '#c99560'; g.strokeStyle = '#5b3d22'; g.lineWidth = 3;
+    [[40, 46], [40, 24], [40, 2]].forEach(([x, y], i) => { g.fillRect(x + (i === 1 ? 6 : 0), y + 14, 48, 20); g.strokeRect(x + (i === 1 ? 6 : 0), y + 14, 48, 20); });
+    g.fillStyle = '#1f5fbf'; g.font = 'bold 26px Jua, sans-serif'; g.textAlign = 'center';
+    g.fillText('쌓는 면', 64, 112);
+  }),
   care: () => canvasTex(128, 128, (g) => {
     g.fillStyle = '#fff6e0'; g.fillRect(0, 0, 128, 128);
     g.strokeStyle = '#d63b2f'; g.lineWidth = 8; g.strokeRect(6, 6, 116, 116);
@@ -615,7 +624,7 @@ export class Factory {
     const tex = STICKER[kind](who);
     const ar = kind === 'label' ? 0.75 : 1;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshLambertMaterial({ map: tex, transparent: kind === 'stamp' }));
-    this._orientOnFace(m, f, 0.06, kind !== 'stamp');
+    this._orientOnFace(m, f, kind === 'stamp' ? 0.04 : 0.08, kind !== 'stamp'); // 스티커는 도장 위에 덮인다
     const s = Math.min(f.size[0] * 0.75, f.size[1] * 0.75 / ar, 3.2);
     m.scale.set(s, s * ar, 1);
     this.rig.group.add(m);

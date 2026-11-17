@@ -2,7 +2,7 @@
 import { ITEMS, CUSTOMERS, COST, dayConfig, UPGRADES, payFor } from './data.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.009';
+export const VERSION = window.BUILD || 'v1.010';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, STATIONS;
@@ -405,7 +405,7 @@ async function playDay(n) {
     const tapes = Object.entries(inv.tape).filter(([, c]) => c > 0).map(([l, c]) => `${l}cm×${c}`);
     return h('div', { class: 'inv' }, h('b', {}, '🎒 들고 있는 재료'),
       h('p', {}, `🩹 테이프 ${tapes.length ? tapes.join(', ') : '없음'}`),
-      h('p', {}, `📄 밑면 스티커 ${inv.base}장 · 🏷 옆면 스티커 ${inv.side}장 · 🛡 보호대 ${inv.guard}개`));
+      h('p', {}, `📦 밑면 스티커 ${inv.base}장 · 🏷 옆면 스티커 ${inv.side}장 · 🛡 보호대 ${inv.guard}개`));
   }
 
   function drawWorkSide() {
@@ -417,7 +417,7 @@ async function playDay(n) {
       h('div', { class: 'tools' },
         tb('tape', '🩹 테이프', `${tapeCount}줄`),
         tb('guard', '🛡 보호대', `${inv.guard}개`),
-        tb('base', '📄 밑면 스티커', `${inv.base}장`),
+        tb('base', '📦 밑면 스티커', `${inv.base}장`),
         tb('side', '🏷 옆면 스티커', `${inv.side}장`)),
       h('button', { class: 'btn big warn', onclick: tryShip }, '📦 포장 끝! 출고'),
       h('p', { class: 'done-count' }, `붙인 것: 테이프 ${o.taped.size}줄 · 보호대 ${o.guarded.size}개 · 밑면 ${o.baseS.size}장 · 옆면 ${o.sideS.size}장`),
@@ -428,7 +428,7 @@ async function playDay(n) {
   function hintTool() {
     if (tool === 'tape') say('테이프를 붙일 모서리를 눌러요. 모서리는 면과 면이 만나는 선분이에요. 그 모서리의 길이와 같은 테이프가 필요해요.');
     else if (tool === 'guard') say('보호대를 끼울 꼭짓점을 눌러요. 꼭짓점은 모서리와 모서리가 만나는 점이에요.');
-    else if (tool === 'base') say('밑면 스티커(송장)는 밑면에 붙여요. 직육면체에서 서로 평행한 두 면이 밑면이에요. 파란 "밑면" 도장이 찍힌 면과, 그 면과 평행한 면을 찾아요.');
+    else if (tool === 'base') say('밑면 스티커(쌓는 면)는 밑면에 붙여요. 창고에서는 밑면끼리 맞닿게 상자를 쌓아요. 직육면체에서 서로 평행한 두 면이 밑면이에요. 파란 "밑면" 도장이 찍힌 면과, 그 면과 평행한 면을 찾아요.');
     else if (tool === 'side') say('옆면 스티커는 옆면에 붙여요. 옆면은 밑면과 만나는 면이고, 밑면과 수직이에요.');
   }
 
@@ -465,7 +465,7 @@ async function playDay(n) {
         return;
       }
       set.add(hit.id);
-      F.addSticker(hit, want ? 'label' : 'care', o.cust); sfx('tape');
+      F.addSticker(hit, want ? 'stack' : 'care', o.cust); sfx('tape');
     } else return;
     drawWorkSide();
   }
@@ -543,8 +543,8 @@ async function playDay(n) {
       let b = 0, s = 0;
       const sum = h('p', { class: 'sum' });
       const upd = () => { sum.textContent = `재료 값 ${won((b + s) * COST.sticker)}`; };
-      panel.append(h('h3', {}, '🏷 스티커 제작기'), h('p', { class: 'hint' }, `📄 밑면 스티커(송장)는 밑면마다, 🏷 옆면 스티커(취급주의)는 옆면마다 붙여요. 밑면과 옆면은 각각 몇 개일까요? (1장에 ${won(COST.sticker)})`),
-        h('div', { class: 'srow' }, h('span', {}, '📄 밑면 스티커'), stepper(0, 0, 12, (v) => { b = v; upd(); }, '장')),
+      panel.append(h('h3', {}, '🏷 스티커 제작기'), h('p', { class: 'hint' }, `📦 밑면 스티커(쌓는 면)는 밑면마다, 🏷 옆면 스티커(취급주의)는 옆면마다 붙여요. 창고에서는 밑면끼리 맞닿게 상자를 쌓거든요. 밑면과 옆면은 각각 몇 개일까요? (1장에 ${won(COST.sticker)})`),
+        h('div', { class: 'srow' }, h('span', {}, '📦 밑면 스티커'), stepper(0, 0, 12, (v) => { b = v; upd(); }, '장')),
         h('div', { class: 'srow' }, h('span', {}, '🏷 옆면 스티커'), stepper(0, 0, 12, (v) => { s = v; upd(); }, '장')),
         sum,
         h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
