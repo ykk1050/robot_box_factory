@@ -268,10 +268,11 @@ export function makeFoldRig(rects, A) {
     node.add(mesh);
     nodes[i] = node; meshes[i] = mesh;
   }
-  function setFold(t) {
-    const th = t * Math.PI / 2;
+  // hold: 이 조각만 따로 holdT만큼 접는다(뚜껑을 열어 둘 때)
+  function setFold(t, hold = -1, holdT = 0) {
     A.order.forEach((i) => {
       if (A.parent[i] < 0) return;
+      const th = (i === hold ? holdT : t) * Math.PI / 2;
       const n = nodes[i];
       n.rotation.set(0, 0, 0);
       const s = A.side[i];

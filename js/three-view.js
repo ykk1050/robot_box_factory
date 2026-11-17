@@ -197,7 +197,7 @@ function stickerTexture(kind) {
 }
 
 // ---------- 도형 자료 ----------
-// 꼭짓점 이름은 교과서처럼 윗면 ㄱㄴㄷㄹ, 아랫면 ㅁㅂㅅㅇ (ㄱ 아래 ㅁ ...)
+// 꼭짓점 이름은 교과서처럼 위쪽 ㄱㄴㄷㄹ, 아래쪽 ㅁㅂㅅㅇ (ㄱ 아래 ㅁ ...)
 export function boxShape(w, h, d) {
   const x = w / 2, y = h / 2, z = d / 2;
   const verts = [

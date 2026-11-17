@@ -1,18 +1,20 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
-import { ITEMS, CUSTOMERS, dayConfig, UPGRADES, payFor } from './data.js';
+import { ITEMS, CUSTOMERS, COST, dayConfig, UPGRADES, payFor } from './data.js';
+
+export const VERSION = 'v1.007'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
+
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
-let analyzeNet, Cutter, boxPicture;
+let analyzeNet, Cutter, boxPicture, STATIONS;
 const loadWork = () => Promise.all([import('./factory.js'), import('./net.js'), import('./cutter.js')]).then(([f, n, c]) => {
-  analyzeNet = n.analyzeNet; Cutter = c.Cutter; boxPicture = c.boxPicture;
+  analyzeNet = n.analyzeNet; Cutter = c.Cutter; boxPicture = c.boxPicture; STATIONS = f.STATIONS;
   return f.Factory;
 });
 
-export const VERSION = 'v1.006'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
-
 // ---------- 저장 ----------
 const SAVE_KEY = 'robot-box-factory-v2';
-let save = { day: 1, money: 0, up: {}, dies: {}, best: {}, sound: true };
+let save = { day: 1, money: 0, up: {}, dies: {}, best: {}, sound: true, char: 'm' };
 try { save = { ...save, ...JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') }; } catch (_) { /* 무시 */ }
+if (save.up.helper) { delete save.up.helper; save.money += 6000; } // 없어진 업그레이드는 돈으로 돌려준다
 function store() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (_) { /* 무시 */ } }
 
 // ---------- 소리 ----------
@@ -47,6 +49,12 @@ function soundBtn() {
   const b = h('button', { class: 'btn ghost small', onclick: () => { save.sound = !save.sound; store(); b.textContent = save.sound ? '🔊 소리 켬' : '🔇 소리 끔'; sfx('click'); } }, save.sound ? '🔊 소리 켬' : '🔇 소리 끔');
   return b;
 }
+function stepper(value, min, max, onChange, unit = '') {
+  let v = value;
+  const num = h('span', { class: 'snum' }, `${v}${unit}`);
+  const set = (n) => { v = Math.max(min, Math.min(max, n)); num.textContent = `${v}${unit}`; onChange(v); sfx('click'); };
+  return h('span', { class: 'stepper' }, h('button', { class: 'sbtn', onclick: () => set(v - 1) }, '−'), num, h('button', { class: 'sbtn', onclick: () => set(v + 1) }, '+'));
+}
 
 // ---------- 시작 화면 ----------
 function showTitle() {
@@ -55,13 +63,23 @@ function showTitle() {
   for (let d = 1; d <= save.day; d++) {
     chips.append(h('button', { class: 'chip' + (d === save.day ? ' now' : ''), onclick: () => { sfx('click'); showIntro(d); } }, `${d}일차 ${'★'.repeat(save.best[d] || 0)}`));
   }
+  const charBtns = h('div', { class: 'row center' });
+  const drawChar = () => {
+    charBtns.innerHTML = '';
+    [['m', '👷‍♂️', '남자 기사'], ['f', '👷‍♀️', '여자 기사']].forEach(([id, em, name]) => {
+      charBtns.append(h('button', { class: 'charbtn' + (save.char === id ? ' sel' : ''), onclick: () => { save.char = id; store(); sfx('click'); drawChar(); } }, h('span', { class: 'cem' }, em), name));
+    });
+  };
+  drawChar();
   app.append(h('div', { class: 'screen title' },
     h('div', { class: 'title-box' },
       h('p', { class: 'kicker' }, '5학년 2학기 · 5. 직육면체'),
       h('h1', {}, '로봇 상자 공장'),
       h('p', { class: 'lead' }, '택배 주문이 밀려들어요! 골판지로 상자를 만들어', h('br'), '물건을 담고 트럭이 떠나기 전에 출고해요.'),
       h('img', { class: 'hero', src: 'img/robot.webp', alt: '공장 로봇 팔 박스봇' }),
-      h('div', { class: 'row center wrap' },
+      h('p', { class: 'muted', style: 'margin:0 0 4px' }, '내 캐릭터'),
+      charBtns,
+      h('div', { class: 'row center wrap', style: 'margin-top:12px' },
         h('button', { class: 'btn big', onclick: () => { sfx('click'); showIntro(save.day); } }, `${save.day}일차 출근하기`),
         h('button', { class: 'btn big ghost', onclick: () => { sfx('click'); showShop(); } }, '🛒 상점')),
       h('p', { class: 'muted', style: 'margin:10px 0 4px' }, `모은 돈 ${won(save.money)}`),
@@ -117,27 +135,35 @@ async function playDay(n) {
   const cfg = dayConfig(n);
   const gl = h('div', { class: 'gl-wrap' });
   const hud = h('header', { class: 'hud' });
+  const leftCol = h('div', { class: 'leftcol' });
+  const orderPin = h('div', { class: 'orderpin hidden' });
   const tickets = h('div', { class: 'tickets' });
+  leftCol.append(orderPin, tickets);
   const side = h('aside', { class: 'side' });
   const bubble = h('div', { class: 'bubble' });
-  const robot = h('footer', { class: 'robot' }, h('img', { src: 'img/robot.webp', alt: '박스봇' }), bubble);
+  const robot = h('div', { class: 'robot' }, h('img', { src: 'img/robot.webp', alt: '박스봇' }), bubble);
+  const nav = h('nav', { class: 'navbar' });
   const cutWrap = h('div', { class: 'cutter hidden' });
+  const panel = h('div', { class: 'stpanel hidden' });
   const fx = h('div', { class: 'fx' });
   const rollBtn = (dir, label, aria) => h('button', { class: 'rbtn r-' + dir, 'aria-label': aria, onclick: () => { if (F.rolling) return; sfx('thud'); F.roll(dir); } }, label);
   const rollPad = h('div', { class: 'rollpad hidden' },
     rollBtn('up', '▲', '상자를 멀리 굴리기'), rollBtn('left', '◀', '상자를 왼쪽으로 굴리기'),
     h('span', { class: 'rmid' }, '상자', h('br'), '굴리기'),
     rollBtn('right', '▶', '상자를 오른쪽으로 굴리기'), rollBtn('down', '▼', '상자를 앞으로 굴리기'));
-  const root = h('div', { class: 'screen play' }, gl, hud, tickets, side, cutWrap, rollPad, robot, fx);
+  const root = h('div', { class: 'screen play' }, gl, hud, leftCol, side, cutWrap, panel, rollPad, robot, nav, fx);
   app.append(root);
-  const F = new Factory(gl);
-  F.view('wide');
+  const F = new Factory(gl, { character: save.char, walkSpeed: save.up.shoes ? 3.5 : 2.2 });
+  F.view('follow');
 
   // 상태
   let timeLeft = cfg.time + (save.up.truck ? 30 : 0);
   const total = timeLeft;
   let earned = 0, done = 0, missed = 0, paused = false, over = false;
-  let orders = [], active = null, step = 'pick', spawnIn = 2, orderSeq = 0;
+  let orders = [], active = null, spawnIn = 2, orderSeq = 0;
+  let where = 'bench', place = 'walk'; // place: walk | cut | work | station | busy
+  const inv = { tape: {}, base: 0, side: 0, guard: 0 };
+  let tool = null;
 
   const say = (t, mood = 'talk') => { bubble.className = 'bubble ' + mood; bubble.textContent = t; bubble.classList.remove('pop'); void bubble.offsetWidth; bubble.classList.add('pop'); };
   const money = (v, why) => {
@@ -148,7 +174,7 @@ async function playDay(n) {
   };
   const oops = (t, cost) => { sfx('no'); say(t, 'sad'); if (active) active.mistakes++; if (cost) money(-cost); };
 
-  // HUD
+  // ---------- HUD ----------
   const timeBar = h('div', { class: 'tbar' }, h('i'));
   const timeTxt = h('span', { class: 'ttxt' });
   const earnEl = h('span', { class: 'pill' });
@@ -164,66 +190,123 @@ async function playDay(n) {
     doneEl.textContent = `📦 ${done}`;
   }
 
-  // 주문
+  // ---------- 가는 곳 ----------
+  const navBtns = {};
+  ['bench', 'tape', 'sticker', 'guard'].forEach((id) => {
+    navBtns[id] = h('button', { class: 'navbtn', onclick: () => { sfx('click'); goTo(id); } }, h('span', { class: 'nicon' }, STATIONS[id].icon), h('span', {}, STATIONS[id].name));
+    nav.append(navBtns[id]);
+  });
+  function markNav() { Object.entries(navBtns).forEach(([id, b]) => b.classList.toggle('here', id === where && place !== 'walk')); }
+
+  function closeAll() {
+    root.classList.remove('cutting');
+    cutWrap.classList.add('hidden'); panel.classList.add('hidden'); rollPad.classList.add('hidden');
+    F.mode = 'walk'; F.allowRotate = false; F.pickables = [];
+  }
+  async function goTo(id) {
+    if (over || place === 'busy') return;
+    closeAll();
+    place = 'walk'; where = id; markNav();
+    F.view('follow');
+    setSideIdle();
+    const ok = await F.goStation(id);
+    if (!ok || over || where !== id || place !== 'walk') return;
+    arrive(id);
+  }
+  async function walkFloor(x, z) {
+    if (place === 'busy') return;
+    closeAll();
+    place = 'walk'; where = null; markNav();
+    F.view('follow');
+    setSideIdle();
+    await F.walkTo(x, z);
+  }
+  function arrive(id) {
+    sfx('click');
+    if (id === 'bench') enterBench();
+    else openStation(id);
+    markNav();
+  }
+  F.onTap = (hit) => {
+    if (!hit || over || paused) return;
+    if (F.mode === 'walk') {
+      if (hit.type === 'station') goTo(hit.id);
+      else if (hit.type === 'floor') walkFloor(hit.x, hit.z);
+      return;
+    }
+    if (place === 'work') useTool(hit);
+  };
+
+  // ---------- 주문 ----------
   function spawn() {
     const first = n === 1 && orderSeq === 0;
     const key = first ? 'puzzle' : cfg.items[Math.floor(Math.random() * cfg.items.length)];
     const item = ITEMS[key];
-    orders.push({ id: ++orderSeq, item, cust: CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)], pay: payFor(item.d), patience: cfg.patience, left: cfg.patience, mistakes: 0 });
+    orders.push({ id: ++orderSeq, item, cust: CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)], pay: payFor(item), patience: cfg.patience, left: cfg.patience, mistakes: 0 });
     sfx('click');
     drawTickets();
   }
-  // 쪽지는 한 번만 만들고 그 뒤에는 막대·색만 바꾼다(누르는 도중 버튼이 바뀌지 않게)
   const emptyTicket = h('div', { class: 'ticket empty' }, '주문을 기다리는 중…');
   function drawTickets() {
-    for (const el of [...tickets.children]) if (el !== emptyTicket && !orders.some((o) => o.el === el)) el.remove();
+    for (const el of [...tickets.children]) if (el !== emptyTicket && !orders.some((o) => o.el === el && o !== active)) el.remove();
     orders.forEach((o) => {
+      if (o === active) return;
       if (!o.el) {
         o.bar = h('i');
         o.el = h('button', { class: 'ticket', onclick: () => pickOrder(o) },
           h('span', { class: 'temoji' }, o.item.emoji),
-          h('span', { class: 'tbody' }, h('b', {}, o.item.name), h('small', {}, `${o.item.d[0]}×${o.item.d[2]}×${o.item.d[1]} cm`), h('small', {}, o.cust), h('small', { class: 'pay' }, won(o.pay))),
+          h('span', { class: 'tbody' }, h('b', {}, o.item.name), h('small', {}, `가로 ${o.item.d[0]} · 세로 ${o.item.d[2]} · 높이 ${o.item.d[1]}`), h('small', { class: 'pay' }, won(o.pay) + (o.item.fragile ? ' · 🛡' : ''))),
           h('span', { class: 'pat' }, o.bar));
-        tickets.append(o.el);
       }
-      o.el.classList.toggle('active', o === active);
+      if (!o.el.isConnected) tickets.append(o.el);
       o.el.classList.toggle('angry', o.left < o.patience * 0.3);
       o.bar.style.width = `${Math.max(0, o.left / o.patience) * 100}%`;
     });
-    if (!orders.length) { if (!emptyTicket.isConnected) tickets.append(emptyTicket); } else emptyTicket.remove();
+    const waiting = orders.filter((o) => o !== active).length;
+    if (!waiting) { if (!emptyTicket.isConnected) tickets.append(emptyTicket); } else emptyTicket.remove();
+    if (active && active.pinBar) active.pinBar.style.width = `${Math.max(0, active.left / active.patience) * 100}%`;
+  }
+  function pinOrder(o) {
+    orderPin.innerHTML = '';
+    if (!o) { orderPin.classList.add('hidden'); return; }
+    o.pinBar = h('i');
+    orderPin.append(...[
+      h('div', { class: 'row' }, h('span', { class: 'temoji big' }, o.item.emoji), h('div', { class: 'pname' }, h('b', {}, o.item.name), h('small', {}, o.cust)), h('span', { class: 'pay' }, won(o.pay))),
+      boxPicture(o.item.d, 210),
+      o.item.fragile ? h('p', { class: 'fragile' }, '🛡 깨지기 쉬워요! 꼭짓점마다 모서리 보호대') : null,
+      h('span', { class: 'pat' }, o.pinBar)].filter(Boolean));
+    orderPin.classList.remove('hidden');
   }
   function pickOrder(o) {
     if (over || paused) return;
-    if (active && active !== o) { say('지금 상자를 먼저 끝내요. 출고하면 다음 주문을 받을 수 있어요.'); return; }
-    if (active) return;
+    if (active) { say('지금 주문을 먼저 끝내요. 출고하면 다음 주문을 받을 수 있어요.'); return; }
     sfx('click');
     active = o;
+    o.phase = 'cut';
+    o.taped = new Set(); o.guarded = new Set(); o.baseS = new Set(); o.sideS = new Set();
+    if (o.el) o.el.remove();
+    pinOrder(o);
     drawTickets();
-    startCut();
-  }
-
-  // ---------- 단계 표시 ----------
-  let cutter = null;
-  function stepsBar(cur) {
-    const names = [['cut', '✂️ 재단'], ['tape', '🩹 테이프'], ['label', '🏷 라벨'], ['ship', '🚚 출고']];
-    const idx = names.findIndex((x) => x[0] === cur);
-    return h('ol', { class: 'steps' }, ...names.map(([k, t], i) => h('li', { class: i < idx ? 'done' : i === idx ? 'now' : '' }, t)));
-  }
-  function orderCard(o) {
-    return h('div', { class: 'ocard' }, h('div', { class: 'row' }, h('span', { class: 'temoji big' }, o.item.emoji), h('div', {}, h('b', {}, o.item.name), h('br'), h('small', {}, o.cust))), boxPicture(o.item.d, 190));
-  }
-  function setSide(...kids) { side.innerHTML = ''; side.append(...kids); }
-
-  // ---------- 단계: 재단 ----------
-  function startCut(keep) {
-    step = 'cut';
-    const o = active;
-    F.onTap = null;
-    F.clearWork();
     F.showItem(o.item);
+    say(`${o.item.name} 주문! 작업대로 가서 골판지를 재단해요.`);
+    goTo('bench');
+  }
+
+  // ---------- 작업대 ----------
+  function enterBench() {
+    if (!active) { place = 'walk'; F.view('follow'); setSideIdle(); say('먼저 왼쪽 주문 쪽지를 골라요.'); return; }
+    if (active.phase === 'cut') openCutter();
+    else if (active.phase === 'packing') enterWork();
+  }
+
+  let cutter = null;
+  function openCutter(keep) {
+    place = 'cut';
+    F.mode = 'busy';
     F.view('table');
-    F.allowRotate = false;
+    const o = active;
     cutWrap.classList.remove('hidden');
+    root.classList.add('cutting');
     cutWrap.innerHTML = '';
     const dieKey = [...o.item.d].sort((a, b) => a - b).join('x');
     const hasDie = save.up.die && save.dies[dieKey];
@@ -242,15 +325,14 @@ async function playDay(n) {
       },
     });
     if (keep) cutter.set(keep);
-    setSide(stepsBar('cut'), orderCard(o),
-      h('p', { class: 'hint' }, '물건과 딱 맞는 상자의 전개도를 그려요. 면끼리 맞닿은 곳은 접는 선(점선)이 돼요.'));
+    setSide(h('p', { class: 'hint' }, '주문서의 상자와 딱 맞는 전개도를 그려요. 면끼리 맞닿은 곳은 접는 선(점선)이 돼요.'), invView());
     if (keep) return;
-    if (n === 1 && done === 0) say('큐브 퍼즐은 가로·세로·높이가 모두 2cm예요. 2×2 정사각형 면을 이어 붙여 상자 전개도를 그려 봐요!');
-    else say(`${o.item.name} 주문! 가로 ${o.item.d[0]}, 세로 ${o.item.d[2]}, 높이 ${o.item.d[1]}cm 상자를 만들어요.`);
+    if (o.item === ITEMS.puzzle && n === 1 && done === 0) say('큐브 퍼즐은 가로·세로·높이가 모두 2cm예요. 2×2 정사각형 면을 이어 붙여 상자 전개도를 그려 봐요!');
+    else say(`가로 ${o.item.d[0]}, 세로 ${o.item.d[2]}, 높이 ${o.item.d[1]}cm 상자의 전개도를 그려요.`);
   }
 
   async function doCut() {
-    if (step !== 'cut' || !active) return;
+    if (place !== 'cut' || !active) return;
     const rects = cutter.rects.map((r) => ({ ...r }));
     if (!rects.length) { say('먼저 골판지에 면을 그려요.'); return; }
     const A = analyzeNet(rects, active.item.d);
@@ -259,15 +341,24 @@ async function playDay(n) {
       oops('빨간 면이 떨어져 있어요! 이웃한 면과 같은 길이의 모서리로 딱 맞닿아야 접을 수 있어요.');
       return;
     }
-    step = 'folding';
+    place = 'busy';
     sfx('fold');
     cutWrap.classList.add('hidden');
+    root.classList.remove('cutting');
     F.buildParcel(rects, A, active.item);
-    F.view('work');
-    setSide(stepsBar('cut'), orderCard(active), h('p', { class: 'hint' }, '접는 중…'));
-    say('물건을 밑면에 올리고 접어요!');
-    await F.fold(save.up.fast ? 800 : 1700);
+    F.view('pack');
+    setSide(h('p', { class: 'hint' }, '골판지를 접는 중…'));
+    const fast = save.up.fast ? 0.5 : 1;
+    const good = A.valid && !A.problem;
+    say(good ? '뚜껑만 남기고 접어요!' : '접어 볼게요…');
+    await F.fold(1500 * fast, good);
     if (!active || over) return;
+    if (good) {
+      say(F.itemFits ? `${active.item.name}을(를) 상자에 쏙!` : '어? 물건이 안 들어가요!');
+      sfx('robot');
+      await F.dropItem();
+      if (!active || over) return;
+    }
     let fail = null;
     if (A.problem === 'overlap') { F.tintFaces([...new Set(A.overlaps.flat())], 0xff8a7a); fail = '빨간 면끼리 겹쳐요! 한쪽에는 면이 두 장, 다른 쪽에는 구멍이 생겼어요.'; }
     else if (A.problem === 'hole') fail = `면이 ${A.n}개뿐이라 구멍이 뚫렸어요. 상자는 면이 6개 있어야 닫혀요.`;
@@ -276,162 +367,234 @@ async function playDay(n) {
     else if (!F.itemFits) fail = `상자가 작아서 ${active.item.name}이(가) 안 들어가요! 상자 크기 ${A.dims.join('×')}를 다시 확인해요.`;
     if (fail) {
       oops(fail + ' (골판지 버림)', 300);
-      setSide(stepsBar('cut'), orderCard(active), h('button', { class: 'btn big', onclick: () => { sfx('click'); startCut(rects); } }, '다시 재단하기'));
+      place = 'cut';
+      setSide(h('button', { class: 'btn big', onclick: () => { sfx('click'); F.clearWork(); F.showItem(active.item); openCutter(rects); } }, '다시 재단하기'), invView());
       return;
     }
+    sfx('fold');
+    await F.closeLid(900 * fast);
+    if (!active || over) return;
     if (save.up.die) { save.dies[[...active.item.d].sort((a, b) => a - b).join('x')] = rects; store(); }
     active.loose = F.itemLoose;
-    sfx('ok');
+    active.phase = 'packing';
     if (F.itemLoose) say('상자는 닫혔는데 물건보다 커서 흔들려요. 완충재 값이 들어요.', 'sad');
-    else say('딱 맞게 접혔어요! 이제 테이프를 붙여요.', 'happy');
-    startTape();
-  }
-
-  // ---------- 단계: 테이프 ----------
-  function startTape() {
-    step = 'tape';
-    rollPad.classList.remove('hidden');
-    const edges = F.setupTape();
-    const seams = edges.filter((e) => !e.hinge);
-    const taped = new Set();
-    F.allowRotate = true;
-    const cnt = h('b', {}, '0');
-    setSide(stepsBar('tape'), orderCard(active),
-      h('p', { class: 'hint' }, '잘라서 맞닿은 모서리는 벌어져 있어요. 그 모서리를 눌러 테이프를 붙여요. 접혀서 이어진 모서리는 붙일 필요가 없어요.'),
-      h('p', { class: 'hint' }, '👆 화면을 끌면 둘러볼 수 있어요. 바닥에 닿은 쪽은 ◀ ▶ ▲ ▼ 버튼으로 상자를 굴려서 봐요.'),
-      h('p', { class: 'big-num' }, '붙인 테이프 ', cnt, '줄'),
-      h('button', { class: 'btn big', onclick: () => {
-        sfx('click');
-        const left = seams.filter((e) => !taped.has(e.id)).length;
-        if (left) { oops('아직 벌어진 모서리가 있어요! 상자를 돌려서 뒤쪽과 아래쪽도 봐요.', 100); return; }
-        F.pickables = [];
-        say(`잘린 모서리 ${seams.length}곳을 모두 붙였어요! 모서리 12개 중 ${12 - seams.length}개는 접혀서 이어진 곳이었어요.`, 'happy');
-        startTumble();
-      } }, '다 붙였어요'));
-    if (!F.itemLoose) say(n === 1 && done === 0 ? '종이를 자른 모서리끼리 만난 곳에 테이프를 붙여요. 상자를 돌려 가며 빠짐없이!' : '잘린 모서리에 테이프를 붙여요.');
-    F.onTap = (hit) => {
-      if (step !== 'tape' || !hit || hit.type !== 'edge') return;
-      const e = hit.edge;
-      if (taped.has(e.id)) { say('거기는 벌써 붙였어요.'); return; }
-      if (e.hinge) { oops('여기는 골판지가 접혀서 이어진 모서리예요. 테이프가 필요 없어요. (테이프 낭비)', 50); return; }
-      taped.add(e.id);
-      F.addTape(e);
-      sfx('tape');
-      cnt.textContent = taped.size;
-    };
-  }
-
-  // ---------- 단계: 굴러 넘어짐 → 라벨 ----------
-  async function startTumble() {
-    step = 'tumble';
-    rollPad.classList.add('hidden');
-    F.allowRotate = false;
-    F.view('work');
-    await new Promise((r) => setTimeout(r, 700));
+    await new Promise((r) => setTimeout(r, 900));
     if (!active || over) return;
-    say('앗! 저울로 옮기다가 상자가 데굴 굴렀어요!', 'sad');
+    say('앗! 작업대에 내려놓다가 상자가 데굴 굴렀어요! 파란 "밑면" 도장이 어디로 갔는지 봐요.', 'sad');
     sfx('thud');
     await F.tumble(Math.floor(Math.random() * 5));
     if (!active || over) return;
-    startLabel();
+    F.setupPacking();
+    enterWork();
   }
 
-  function startLabel() {
-    step = 'label';
-    rollPad.classList.remove('hidden');
+  // ---------- 포장 (작업대에서 재료 붙이기) ----------
+  function enterWork() {
+    place = 'work';
+    F.mode = 'work';
     F.allowRotate = true;
-    const faces = F.setupFaces();
-    const placed = new Set();
-    let tool = 'label', labelDone = false, arrows = 0;
-    const btnLabel = h('button', { class: 'tool sel', onclick: () => { tool = 'label'; sfx('click'); mark(); } }, '📄 송장');
-    const btnArrow = h('button', { class: 'tool', onclick: () => { tool = 'arrow'; sfx('click'); mark(); } }, '⬆️ 이쪽이 위');
-    const status = h('p', { class: 'big-num' });
-    function mark() {
-      btnLabel.classList.toggle('sel', tool === 'label'); btnArrow.classList.toggle('sel', tool === 'arrow');
-      btnLabel.disabled = labelDone;
-      status.textContent = `송장 ${labelDone ? '✔' : '0/1'} · 화살표 ${arrows}장`;
-    }
-    setSide(stepsBar('label'), orderCard(active),
-      h('p', { class: 'hint' }, '파란 "밑면" 도장이 찍힌 면이 상자의 밑면이에요. 바닥에 깔린 면은 ◀ ▶ ▲ ▼ 버튼으로 상자를 굴려서 찾아요.'),
-      h('p', { class: 'hint' }, '📄 송장은 밑면과 평행한 윗면에, ⬆️ 화살표는 밑면과 수직인 옆면마다 붙여요.'),
-      h('div', { class: 'row wrap' }, btnLabel, btnArrow), status,
-      h('button', { class: 'btn big', onclick: () => {
-        sfx('click');
-        const sides = faces.filter((f) => f.role === 'side' && !placed.has(f.id)).length;
-        if (!labelDone) { oops('송장을 아직 안 붙였어요.', 0); return; }
-        if (sides) { oops('화살표가 빠진 옆면이 있어요. 밑면과 수직인 옆면은 모두 몇 개일까요? 상자를 돌려 봐요.', 100); return; }
-        F.pickables = [];
-        say('완벽해요! 기사님이 어느 쪽이 위인지 바로 알겠어요.', 'happy');
-        startShip();
-      } }, '라벨 끝!'));
-    if (save.up.helper) {
-      const top = faces.find((f) => f.role === 'top');
-      F.addSticker(top, 'label', active.cust); placed.add(top.id); labelDone = true; tool = 'arrow';
-      say('송장 도우미 로봇이 윗면에 송장을 붙였어요. 화살표는 직접 붙여요!');
-    } else say('상자가 굴러서 밑면이 어디로 갔을까요? 파란 "밑면" 도장을 찾아봐요!');
-    mark();
-    F.onTap = (hit) => {
-      if (step !== 'label' || !hit || hit.type !== 'face') return;
-      if (placed.has(hit.id)) { say('거기는 벌써 붙였어요.'); return; }
-      if (hit.role === 'base') { oops('그 면은 밑면이에요. 밑면에는 붙이지 않아요.', 0); return; }
-      if (tool === 'label') {
-        if (hit.role !== 'top') { oops('송장은 밑면과 평행한 윗면에 붙여요. 이 면은 밑면과 수직인 옆면이에요.', 100); return; }
-        F.addSticker(hit, 'label', active.cust); placed.add(hit.id); labelDone = true; tool = 'arrow'; sfx('tape');
-        say('송장 완료! 이제 옆면마다 화살표를 붙여요.', 'happy');
-      } else {
-        if (hit.role === 'top') { oops('그 면은 밑면과 평행한 윗면이에요. 화살표는 밑면과 수직인 옆면에 붙여요.', 100); return; }
-        F.addSticker(hit, 'arrow'); placed.add(hit.id); arrows++; sfx('tape');
+    F.view('work');
+    rollPad.classList.remove('hidden');
+    F.setTool(tool);
+    drawWorkSide();
+    if (!tool) say('오른쪽에서 도구를 고르고 상자를 눌러 붙여요. 재료가 없으면 기계에 가서 만들어 와요.');
+  }
+
+  function invView() {
+    const tapes = Object.entries(inv.tape).filter(([, c]) => c > 0).map(([l, c]) => `${l}cm×${c}`);
+    return h('div', { class: 'inv' }, h('b', {}, '🎒 들고 있는 재료'),
+      h('p', {}, `🩹 테이프 ${tapes.length ? tapes.join(', ') : '없음'}`),
+      h('p', {}, `📄 밑면 스티커 ${inv.base}장 · 🏷 옆면 스티커 ${inv.side}장 · 🛡 보호대 ${inv.guard}개`));
+  }
+
+  function drawWorkSide() {
+    if (place !== 'work') return;
+    const o = active;
+    const tapeCount = Object.values(inv.tape).reduce((a, b) => a + b, 0);
+    const tb = (id, label, count) => h('button', { class: 'tool' + (tool === id ? ' sel' : ''), onclick: () => { tool = id; F.setTool(id); sfx('click'); drawWorkSide(); hintTool(); } }, label, h('small', {}, count));
+    setSide(
+      h('div', { class: 'tools' },
+        tb('tape', '🩹 테이프', `${tapeCount}줄`),
+        tb('guard', '🛡 보호대', `${inv.guard}개`),
+        tb('base', '📄 밑면 스티커', `${inv.base}장`),
+        tb('side', '🏷 옆면 스티커', `${inv.side}장`)),
+      h('button', { class: 'btn big warn', onclick: tryShip }, '📦 포장 끝! 출고'),
+      h('p', { class: 'done-count' }, `붙인 것: 테이프 ${o.taped.size}줄 · 보호대 ${o.guarded.size}개 · 밑면 ${o.baseS.size}장 · 옆면 ${o.sideS.size}장`),
+      invView(),
+      h('p', { class: 'hint' }, '👆 화면을 끌면 둘러보고, ◀ ▶ ▲ ▼로 상자를 굴려요.'));
+  }
+
+  function hintTool() {
+    if (tool === 'tape') say('테이프를 붙일 모서리를 눌러요. 모서리 길이와 같은 테이프가 필요해요.');
+    else if (tool === 'guard') say('보호대를 끼울 꼭짓점을 눌러요.');
+    else if (tool === 'base') say('밑면 스티커(송장)는 밑면에 붙여요. 파란 "밑면" 도장이 찍힌 면과, 그 면과 평행한 면이 밑면이에요.');
+    else if (tool === 'side') say('옆면 스티커는 밑면과 수직으로 만나는 옆면에 붙여요.');
+  }
+
+  function useTool(hit) {
+    const o = active;
+    if (!o || o.phase !== 'packing') return;
+    if (!tool) { say('먼저 오른쪽에서 도구를 골라요.'); return; }
+    if (tool === 'tape' && hit.type === 'edge') {
+      const e = hit.edge;
+      if (o.taped.has(e.id)) { say('이 모서리는 벌써 붙였어요.'); return; }
+      if (!inv.tape[e.len]) {
+        const have = Object.keys(inv.tape).filter((l) => inv.tape[l] > 0);
+        say(have.length ? `이 모서리는 ${e.len}cm예요. ${e.len}cm 테이프가 없어요. 테이프 출력기에서 뽑아 와요.` : '테이프가 없어요. 테이프 출력기에 가서 길이와 개수를 넣고 뽑아 와요.', 'sad');
+        sfx('no');
+        return;
       }
-      mark();
-    };
+      inv.tape[e.len]--;
+      o.taped.add(e.id); F.addTape(e); sfx('tape');
+    } else if (tool === 'guard' && hit.type === 'corner') {
+      if (!o.item.fragile) { say('이 물건은 깨지지 않아서 보호대가 필요 없어요.'); return; }
+      if (o.guarded.has(hit.id)) { say('이 꼭짓점에는 벌써 끼웠어요.'); return; }
+      if (inv.guard <= 0) { say('보호대가 없어요. 보호대 선반에서 가져와요.', 'sad'); sfx('no'); return; }
+      inv.guard--; o.guarded.add(hit.id); F.addGuard(hit); sfx('click');
+    } else if ((tool === 'base' || tool === 'side') && hit.type === 'face') {
+      const isBase = hit.role === 'base' || hit.role === 'base2';
+      const want = tool === 'base';
+      const set = want ? o.baseS : o.sideS;
+      if (o.baseS.has(hit.id) || o.sideS.has(hit.id)) { say('그 면에는 벌써 스티커가 있어요.'); return; }
+      if ((want ? inv.base : inv.side) <= 0) { say(`${want ? '밑면' : '옆면'} 스티커가 없어요. 스티커 제작기에서 만들어 와요.`, 'sad'); sfx('no'); return; }
+      if (want) inv.base--; else inv.side--;
+      if (want !== isBase) {
+        oops(want ? '이 면은 옆면이에요! 밑면은 파란 도장이 찍힌 면과, 그 면과 평행한 면이에요. (스티커 버림)' : '이 면은 밑면이에요! 옆면은 밑면과 수직으로 만나는 면이에요. (스티커 버림)', 0);
+        drawWorkSide();
+        return;
+      }
+      set.add(hit.id);
+      F.addSticker(hit, want ? 'label' : 'care', o.cust); sfx('tape');
+    } else return;
+    drawWorkSide();
   }
 
-  // ---------- 단계: 출고 ----------
-  function startShip() {
-    step = 'ship';
+  function tryShip() {
+    const o = active;
+    if (!o || place !== 'work') return;
+    sfx('click');
+    const miss = [];
+    if (o.taped.size < 12) miss.push('테이프가 안 붙은 모서리');
+    if (o.item.fragile && o.guarded.size < 8) miss.push('보호대가 없는 꼭짓점');
+    if (o.baseS.size < 2) miss.push('스티커가 없는 밑면');
+    if (o.sideS.size < 4) miss.push('스티커가 없는 옆면');
+    if (miss.length) { oops(`검수 불합격! 아직 ${miss.join(', ')}이(가) 있어요. 상자를 굴려 가며 빠짐없이 봐요.`, 0); return; }
+    ship();
+  }
+
+  async function ship() {
+    const o = active;
+    place = 'busy';
     rollPad.classList.add('hidden');
-    F.allowRotate = false;
-    F.onTap = null;
-    const btn = h('button', { class: 'btn big warn', onclick: async () => {
-      btn.disabled = true;
-      sfx('robot');
-      F.view('ship');
-      const o = active;
-      await F.ship();
-      if (over) return;
-      let pay = o.pay;
-      const fast = o.left / o.patience > 0.5;
-      if (o.loose) pay = Math.round(pay * 0.7 / 100) * 100;
-      if (fast) pay += Math.round(o.pay * (save.up.sign ? 0.3 : 0.2) / 100) * 100;
-      done++;
-      money(pay, fast ? '빠른 배송 팁!' : '');
-      sfx('ok');
-      say(o.mistakes === 0 ? `${o.cust}: "완벽한 상자예요! 고마워요!"` : `${o.cust}: "잘 받았어요!"`, 'happy');
-      orders = orders.filter((x) => x !== o);
-      active = null;
-      F.clearWork();
-      F.view('wide');
-      step = 'pick';
-      idleSide();
-      drawTickets();
-    } }, '🚚 출고!');
-    setSide(stepsBar('ship'), orderCard(active), btn);
-    say('트럭으로 보내요!');
+    F.allowRotate = false; F.mode = 'busy'; F.pickables = [];
+    setSide(h('p', { class: 'hint' }, '출고 중…'));
+    sfx('robot');
+    F.view('ship');
+    await F.ship();
+    if (over) return;
+    let pay = o.pay;
+    const fast = o.left / o.patience > 0.5;
+    if (o.loose) pay = Math.round(pay * 0.7 / 100) * 100;
+    if (fast) pay += Math.round(o.pay * (save.up.sign ? 0.3 : 0.2) / 100) * 100;
+    done++;
+    money(pay, fast ? '빠른 배송 팁!' : '');
+    sfx('ok');
+    say(o.mistakes === 0 ? `${o.cust}: "완벽한 상자예요! 고마워요!"` : `${o.cust}: "잘 받았어요!"`, 'happy');
+    orders = orders.filter((x) => x !== o);
+    active = null;
+    pinOrder(null);
+    F.clearWork();
+    tool = null;
+    place = 'walk'; where = 'bench'; F.mode = 'walk';
+    F.view('follow');
+    setSideIdle();
+    drawTickets();
+    markNav();
   }
 
-  function idleSide() {
-    setSide(h('div', { class: 'ocard' }, h('b', {}, '📋 주문 쪽지를 골라요'), h('p', { class: 'hint' }, '주문 쪽지를 누르면 작업을 시작해요. 손님이 너무 오래 기다리면 주문을 취소해요!')));
+  // ---------- 기계 ----------
+  function stationDone(msg) {
+    say(msg, 'happy');
+    panel.classList.add('hidden'); place = 'walk'; markNav(); setSideIdle();
+  }
+  function openStation(id) {
+    place = 'station';
+    panel.innerHTML = '';
+    panel.classList.remove('hidden');
+    const close = h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); panel.classList.add('hidden'); place = 'walk'; markNav(); } }, '닫기');
+    if (id === 'tape') {
+      const rows = [{ len: 2, cnt: 0 }, { len: 3, cnt: 0 }, { len: 4, cnt: 0 }];
+      const sum = h('p', { class: 'sum' });
+      const upd = () => { const L = rows.reduce((s, r) => s + r.len * r.cnt, 0), C = rows.reduce((s, r) => s + r.cnt, 0); sum.textContent = `테이프 ${C}줄 · 모두 ${L}cm · 재료 값 ${won(L * COST.tape)}`; };
+      panel.append(h('h3', {}, '🩹 테이프 출력기'), h('p', { class: 'hint' }, `모서리에 붙일 테이프의 길이와 개수를 넣으면 잘라서 나와요. (1cm에 ${won(COST.tape)})`),
+        ...rows.map((r) => h('div', { class: 'srow' }, h('span', {}, '길이'), stepper(r.len, 1, 9, (v) => { r.len = v; upd(); }, 'cm'), h('span', {}, '개수'), stepper(r.cnt, 0, 12, (v) => { r.cnt = v; upd(); }, '줄'))),
+        sum,
+        h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
+          const L = rows.reduce((s, r) => s + r.len * r.cnt, 0);
+          if (!L) { say('개수를 넣어야 테이프가 나와요.'); return; }
+          rows.forEach((r) => { if (r.cnt) inv.tape[r.len] = (inv.tape[r.len] || 0) + r.cnt; });
+          money(-L * COST.tape, '테이프');
+          sfx('tape');
+          stationDone(`테이프 ${rows.filter((r) => r.cnt).map((r) => `${r.len}cm ${r.cnt}줄`).join(', ')}이 나왔어요!`);
+        } }, '출력하기')));
+      upd();
+    } else if (id === 'sticker') {
+      let b = 0, s = 0;
+      const sum = h('p', { class: 'sum' });
+      const upd = () => { sum.textContent = `재료 값 ${won((b + s) * COST.sticker)}`; };
+      panel.append(h('h3', {}, '🏷 스티커 제작기'), h('p', { class: 'hint' }, `📄 밑면 스티커는 송장, 🏷 옆면 스티커는 "취급주의"예요. (1장에 ${won(COST.sticker)})`),
+        h('div', { class: 'srow' }, h('span', {}, '📄 밑면 스티커'), stepper(0, 0, 12, (v) => { b = v; upd(); }, '장')),
+        h('div', { class: 'srow' }, h('span', {}, '🏷 옆면 스티커'), stepper(0, 0, 12, (v) => { s = v; upd(); }, '장')),
+        sum,
+        h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
+          if (!b && !s) { say('몇 장 만들지 넣어요.'); return; }
+          inv.base += b; inv.side += s;
+          money(-(b + s) * COST.sticker, '스티커');
+          sfx('click');
+          stationDone(`밑면 스티커 ${b}장, 옆면 스티커 ${s}장을 만들었어요!`);
+        } }, '만들기')));
+      upd();
+    } else if (id === 'guard') {
+      let g = 0;
+      const sum = h('p', { class: 'sum' });
+      const upd = () => { sum.textContent = `재료 값 ${won(g * COST.guard)}`; };
+      panel.append(h('h3', {}, '🛡 보호대 선반'), h('p', { class: 'hint' }, `깨지기 쉬운 물건의 상자에는 꼭짓점마다 모서리 보호대를 끼워요. (1개에 ${won(COST.guard)})`),
+        h('div', { class: 'srow' }, h('span', {}, '🛡 모서리 보호대'), stepper(0, 0, 16, (v) => { g = v; upd(); }, '개')),
+        sum,
+        h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
+          if (!g) { say('몇 개 가져갈지 넣어요.'); return; }
+          inv.guard += g;
+          money(-g * COST.guard, '보호대');
+          sfx('click');
+          stationDone(`보호대 ${g}개를 챙겼어요!`);
+        } }, '가져가기')));
+      upd();
+    }
+    setSideIdle();
+  }
+
+  function setSide(...kids) { side.innerHTML = ''; side.append(...kids); }
+  function setSideIdle() {
+    if (place === 'work') { drawWorkSide(); return; }
+    const o = active;
+    const tip = !o ? '📋 왼쪽 주문 쪽지를 골라요. 손님이 너무 오래 기다리면 취소해요!'
+      : o.phase === 'cut' ? '🧰 작업대로 가서 상자 전개도를 재단해요.'
+        : '🧰 재료를 챙겼으면 작업대로 가서 상자에 붙여요.';
+    setSide(h('p', { class: 'hint' }, tip),
+      h('p', { class: 'hint' }, '👆 바닥이나 기계를 톡 누르면 걸어가요. 아래 버튼으로도 갈 수 있어요.'),
+      invView());
   }
 
   function cancelActive(reason) {
     if (!active) return;
-    rollPad.classList.add('hidden');
     orders = orders.filter((x) => x !== active);
     active = null;
-    step = 'pick';
-    cutWrap.classList.add('hidden');
-    F.clearWork(); F.allowRotate = false; F.onTap = null; F.view('wide');
-    idleSide();
+    pinOrder(null);
+    closeAll();
+    F.clearWork();
+    place = 'walk'; tool = null;
+    F.view('follow');
+    setSideIdle();
     say(reason, 'sad');
   }
 
@@ -444,7 +607,7 @@ async function playDay(n) {
     if (paused || over) return;
     timeLeft -= dt;
     spawnIn -= dt;
-    if (spawnIn <= 0 && orders.length < 3 && timeLeft > 25) { spawn(); spawnIn = cfg.every; }
+    if (spawnIn <= 0 && orders.length < 3 && timeLeft > 40) { spawn(); spawnIn = cfg.every; }
     for (const o of orders.slice()) {
       o.left -= dt * (o === active ? 0.5 : 1);
       if (o.left <= 0) {
@@ -477,9 +640,8 @@ async function playDay(n) {
     if (over) return;
     over = true;
     clearInterval(timer);
-    rollPad.classList.add('hidden');
-    cutWrap.classList.add('hidden');
-    F.onTap = null; F.allowRotate = false;
+    closeAll();
+    F.onTap = null;
     F.clearWork();
     F.view('ship');
     say('트럭이 출발해요! 부릉부릉~');
@@ -492,13 +654,15 @@ async function playDay(n) {
     save.best[n] = Math.max(save.best[n] || 0, stars);
     store();
     sfx(pass ? 'clear' : 'no');
+    const left = Object.values(inv.tape).reduce((a, b) => a + b, 0) + inv.base + inv.side + inv.guard;
     root.append(h('div', { class: 'overlay' }, h('div', { class: 'card big-card' },
       h('p', { class: 'kicker' }, `${n}일차 근무 끝`),
       h('h2', {}, pass ? '목표 달성! 🎉' : '목표에 조금 모자라요'),
       h('p', { class: 'big-stars' }, '★'.repeat(stars) + '☆'.repeat(3 - stars)),
       h('ul', { class: 'stats' },
-        h('li', {}, `오늘 매출 ${won(earned)} (목표 ${won(cfg.target)})`),
+        h('li', {}, `오늘 매출 ${won(earned)} (목표 ${won(cfg.target)}, 재료 값 뺀 금액)`),
         h('li', {}, `보낸 상자 ${done}개 · 놓친 주문 ${missed}개`),
+        left ? h('li', {}, `쓰지 못하고 남은 재료 ${left}개`) : null,
         h('li', {}, `모은 돈 ${won(save.money)}`)),
       h('div', { class: 'row end wrap' },
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); playDay(n); } }, '다시 하기'),
@@ -507,11 +671,12 @@ async function playDay(n) {
   }
 
   cleanup = () => { over = true; clearInterval(timer); F.dispose(); };
-  idleSide();
+  setSideIdle();
   drawHud();
   drawTickets();
+  markNav();
   say(n === 1 ? '곧 첫 주문이 들어와요! 주문 쪽지가 오면 눌러요.' : '오늘도 힘내요! 주문 쪽지를 눌러 시작해요.');
-  window.__game = { F, get step() { return step; }, get orders() { return orders; }, pick: pickOrder, get cutter() { return cutter; }, doCut, endDay, setTime: (t) => { timeLeft = t; } };
+  window.__game = { F, inv, get place() { return place; }, get active() { return active; }, get orders() { return orders; }, pick: pickOrder, get cutter() { return cutter; }, doCut, goTo, useTool, tryShip, endDay, setTime: (t) => { timeLeft = t; } };
 }
 
 window.__factory = { save, showTitle, playDay, showShop };

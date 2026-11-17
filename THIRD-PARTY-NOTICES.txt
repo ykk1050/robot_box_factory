@@ -10,9 +10,18 @@ Rooted gantry arm by Polyfork (https://polyfork.dev/asset/rooted-gantry-arm-f35c
 Delivery Truck by Polyfork (https://polyfork.dev/asset/delivery-truck-a9537e), CC BY 4.0
 Timber EUR Pallet by Polyfork (https://polyfork.dev/asset/timber-eur-pallet-a1f655), CC BY 4.0
 Material Pallet by Polyfork (https://polyfork.dev/asset/material-pallet-6af263), CC BY 4.0
-바꾼 것: 모델 파일(models/*.glb)은 그대로 쓰고, 로봇 팔은 Blender로 투명 배경 그림(img/robot.webp)으로도 렌더링해서 사용했습니다.
+Construction Worker by Polyfork (https://polyfork.dev/asset/construction-worker-c1ad8c), CC BY 4.0
+Railway Carter by Polyfork (https://polyfork.dev/asset/railway-carter-971897), CC BY 4.0
+바꾼 것: 모델 파일(models/*.glb)은 그대로 쓰고, 일꾼의 걷기 동작은 제자리에서 걷도록 엉덩이 앞뒤 이동만 없애서 쓰며, 로봇 팔은 Blender로 투명 배경 그림(img/robot.webp)으로도 렌더링해서 사용했습니다.
 라이선스: https://creativecommons.org/licenses/by/4.0/
 이 게임은 Polyfork가 만들거나 추천한 것이 아닙니다.
+
+==============================================================================
+캐릭터 동작 (Idle, Walk, Run) — CC0 1.0
+==============================================================================
+Universal Animation Library by Quaternius (https://quaternius.com), CC0 1.0
+일꾼 모델 파일 안에 함께 들어 있는 동작입니다. 표기 의무는 없지만 출처를 남깁니다.
+라이선스: https://creativecommons.org/publicdomain/zero/1.0/
 
 ==============================================================================
 효과음 (Kenney) — CC0 1.0
