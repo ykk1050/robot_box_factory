@@ -7,7 +7,7 @@ const loadWork = () => Promise.all([import('./factory.js'), import('./net.js'), 
   return f.Factory;
 });
 
-export const VERSION = 'v1.004'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
+export const VERSION = 'v1.005'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
 
 // ---------- 저장 ----------
 const SAVE_KEY = 'robot-box-factory-v2';

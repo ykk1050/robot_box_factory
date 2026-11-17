@@ -156,11 +156,74 @@ export class Factory {
       } catch (e) { console.warn('모델을 불러오지 못함', file, e); return null; }
     };
     this.truck = await put('delivery-truck-a9537e', BELT_END + 3.2, 0, 0.2, Math.PI / 2);
-    if (this.truck) this.truckHome = this.truck.position.clone();
+    if (this.truck) { this.truckHome = this.truck.position.clone(); this._makeDoor(); }
     put('rooted-gantry-arm-f35c8f', -2.4, 0, -2.2, 0.5);
     put('timber-eur-pallet-a1f655', 2.0, 0, -2.6);
     put('material-pallet-6af263', 3.5, 0, -2.7, 0.3);
     put('material-pallet-6af263', -3.7, 0, 1.6, -0.6);
+  }
+
+  // 트럭 뒷문(셔터): 모델의 문 위에 덮어서 열고 닫는다
+  _makeDoor() {
+    this.truck.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(this.truck);
+    const W = (bb.max.z - bb.min.z) * 0.8, y0 = 0.98, y1 = bb.max.y - 0.2, H = y1 - y0;
+    const g = new THREE.Group();
+    g.position.set(bb.min.x, y0, (bb.min.z + bb.max.z) / 2);
+    // 짐칸 안쪽(어두운 공간)
+    const inside = new THREE.Mesh(new THREE.BoxGeometry(0.02, H, W), new THREE.MeshBasicMaterial({ color: 0x241c16 }));
+    inside.position.set(-0.012, H / 2, 0);
+    g.add(inside);
+    // 실은 상자 더미
+    this.cargo = new THREE.Group();
+    this.cargo.position.set(-0.05, 0, 0);
+    g.add(this.cargo);
+    this.cargoSpace = { W, H };
+    // 셔터
+    const tex = canvasTex(64, 128, (c) => {
+      c.fillStyle = '#d8d4cc'; c.fillRect(0, 0, 64, 128);
+      c.fillStyle = '#b9b4aa'; for (let y = 0; y < 128; y += 16) c.fillRect(0, y, 64, 4);
+    });
+    tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1, 3);
+    this.shutter = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1, W + 0.04), new THREE.MeshLambertMaterial({ map: tex }));
+    this.shutterH = H + 0.02;
+    this.door = g;
+    this._setDoor(0);
+    g.add(this.shutter);
+    // 문틀
+    const frame = new THREE.MeshLambertMaterial({ color: 0x5b6168 });
+    for (const z of [-W / 2 - 0.05, W / 2 + 0.05]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, H + 0.1, 0.08), frame);
+      post.position.set(-0.06, H / 2, z);
+      g.add(post);
+    }
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, W + 0.2), frame);
+    lintel.position.set(-0.07, H + 0.06, 0);
+    g.add(lintel);
+    this.truck.attach(g);
+  }
+
+  _setDoor(open) {
+    // open 0(닫힘)~1(열림): 셔터가 위로 말려 올라간다
+    const h = this.shutterH * (1 - open * 0.94);
+    this.shutter.scale.y = h;
+    this.shutter.position.set(-0.1, this.shutterH - h / 2 - 0.01, 0);
+    this.doorOpen = open;
+  }
+
+  async openDoor() { if (!this.shutter || this.doorOpen >= 1) return; const a = this.doorOpen; await this.animate(600, (t) => this._setDoor(a + (1 - a) * t)); }
+  async closeDoor() { if (!this.shutter || this.doorOpen <= 0) return; const a = this.doorOpen; await this.animate(600, (t) => this._setDoor(a * (1 - t))); }
+
+  _stackCargo() {
+    if (!this.cargo) return;
+    const { W, H } = this.cargoSpace;
+    const n = this.cargo.children.length;
+    const per = 4, s = Math.min(0.42, W / per - 0.04);
+    const row = n % per, lvl = Math.floor(n / per);
+    if (lvl * (s + 0.02) + s > H) return; // 가득 참
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.05, s, s), new THREE.MeshLambertMaterial({ color: [0xc99560, 0xd8a86e, 0xb98550][n % 3] }));
+    b.position.set(0, lvl * (s + 0.02) + s / 2, -W / 2 + s / 2 + 0.03 + row * (s + 0.04));
+    this.cargo.add(b);
   }
 
   // ---------- 카메라·입력 ----------
@@ -470,6 +533,7 @@ export class Factory {
     const p = this.parcel;
     if (!p) return;
     const startX = p.position.x;
+    this.openDoor();
     this.beltMoving = true;
     await this.animate(500, (t) => { p.position.x = startX + t * 0.9; });
     await this.animate(1900, (t) => { p.position.x = startX + 0.9 + t * (BELT_END - 0.9); });
@@ -478,10 +542,13 @@ export class Factory {
     this.scene.remove(p);
     this.parcel = null;
     this.truckLoad++;
+    this._stackCargo();
+    setTimeout(() => { if (this.alive && !this.parcel) this.closeDoor(); }, 900);
   }
 
   async truckLeave() {
     if (!this.truck) return;
+    await this.closeDoor();
     const s = this.truck.position.clone();
     await this.animate(2200, (t) => { this.truck.position.z = s.z + t * t * 14; });
   }
