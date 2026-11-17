@@ -1,9 +1,13 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
 import { ITEMS, CUSTOMERS, dayConfig, UPGRADES, payFor } from './data.js';
-import { analyzeNet } from './net.js';
-import { Cutter, boxPicture } from './cutter.js';
+// 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
+let analyzeNet, Cutter, boxPicture;
+const loadWork = () => Promise.all([import('./factory.js'), import('./net.js'), import('./cutter.js')]).then(([f, n, c]) => {
+  analyzeNet = n.analyzeNet; Cutter = c.Cutter; boxPicture = c.boxPicture;
+  return f.Factory;
+});
 
-export const VERSION = 'v1.003'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
+export const VERSION = 'v1.004'; // 고칠 때마다 +0.001 (화면 아래 제작자 줄에 표시)
 
 // ---------- 저장 ----------
 const SAVE_KEY = 'robot-box-factory-v2';
@@ -107,7 +111,7 @@ function showIntro(n) {
 async function playDay(n) {
   leave();
   app.append(h('div', { class: 'screen title' }, h('p', { class: 'lead' }, '공장 문을 여는 중…')));
-  const { Factory } = await import('./factory.js').catch(() => ({}));
+  const Factory = await loadWork().catch(() => null);
   app.innerHTML = '';
   if (!Factory) { app.append(h('div', { class: 'screen title' }, h('div', { class: 'card' }, h('p', {}, '공장을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.'), h('button', { class: 'btn', onclick: () => location.reload() }, '다시 열기')))); return; }
   const cfg = dayConfig(n);
@@ -512,4 +516,4 @@ async function playDay(n) {
 
 window.__factory = { save, showTitle, playDay, showShop };
 showTitle();
-setTimeout(() => import('./factory.js').catch(() => {}), 600);
+setTimeout(() => loadWork().catch(() => {}), 600);
