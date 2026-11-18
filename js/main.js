@@ -1,8 +1,9 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
 import { ITEMS, CUSTOMERS, COST, BAG, dayConfig, UPGRADES, payFor } from './data.js';
+import { RANK_URL, TEST, rankOn, CATS, call } from './rank.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.022';
+export const VERSION = window.BUILD || 'v1.023';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -103,7 +104,8 @@ function showTitle() {
       charBtns,
       h('div', { class: 'row center wrap', style: 'margin-top:12px' },
         h('button', { class: 'btn big', onclick: () => { sfx('click'); showIntro(save.day); } }, `${save.day}일차 출근하기`),
-        h('button', { class: 'btn big ghost', onclick: () => { sfx('click'); showShop(); } }, '🛒 상점')),
+        h('button', { class: 'btn big ghost', onclick: () => { sfx('click'); showShop(); } }, '🛒 상점'),
+        h('button', { class: 'btn big ghost', onclick: () => { sfx('click'); showRanking(); } }, '🏆 랭킹')),
       h('div', { class: 'row center wrap', style: 'margin-top:10px' },
         h('button', { class: 'btn ghost' + (save.tutorialDone ? '' : ' tut-glow'), onclick: () => { sfx('click'); playDay(1, { tutorial: true }); } }, '🎓 조작 연습'),
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); loadWork().then(() => showNetGuide()).catch(() => {}); } }, '📐 전개도 유형 11가지')),
@@ -113,6 +115,64 @@ function showTitle() {
 }
 
 // ---------- 상점 ----------
+// ---------- 반 랭킹 ----------
+function profileDialog(after) {
+  const r = save.rank || {};
+  const cls = h('input', { class: 'tin', value: r.cls || '', maxlength: 12, placeholder: '예: 5-2' });
+  const nick = h('input', { class: 'tin', value: r.nick || '', maxlength: 10, placeholder: '예: 상자왕' });
+  const pin = h('input', { class: 'tin', value: r.pin || '', maxlength: 4, inputmode: 'numeric', pattern: '[0-9]*', placeholder: '숫자 4자리' });
+  const msg = h('p', { class: 'hint' }, '실제 이름 대신 별명을 써요. 비밀번호는 다른 친구가 내 별명으로 점수를 올리지 못하게 막아 줘요.');
+  const ov = h('div', { class: 'overlay' }, h('div', { class: 'card' },
+    h('h2', {}, '🏆 랭킹 참가하기'),
+    h('label', { class: 'field' }, '반 코드', cls),
+    h('label', { class: 'field' }, '별명 (2~10글자)', nick),
+    h('label', { class: 'field' }, '비밀번호', pin),
+    msg,
+    h('div', { class: 'row end' },
+      h('button', { class: 'btn ghost', onclick: () => { sfx('click'); ov.remove(); } }, '닫기'),
+      h('button', { class: 'btn', onclick: async (e) => {
+        const q = { cls: cls.value.trim(), nick: nick.value.trim(), pin: pin.value.trim() };
+        if (!q.cls || q.nick.length < 2 || !/^\d{4}$/.test(q.pin)) { msg.textContent = '반 코드, 별명(2글자 이상), 숫자 4자리 비밀번호를 모두 넣어요.'; return; }
+        const btn = e.currentTarget; // 기다린 뒤에는 e.currentTarget이 비므로 미리 잡아 둔다
+        btn.disabled = true;
+        msg.textContent = '확인하는 중…';
+        const res = await call({ act: 'join', ...q });
+        btn.disabled = false;
+        msg.textContent = res.msg || '';
+        if (!res.ok) return;
+        save.rank = q; store(); sfx('ok');
+        setTimeout(() => { ov.remove(); if (after) after(); }, 700);
+      } }, '참가하기'))));
+  app.append(ov);
+}
+
+async function showRanking(cat = 'day', day = save.day > 1 ? save.day - 1 : 1) {
+  leave();
+  const list = h('div', { class: 'ranklist' });
+  const tabs = h('div', { class: 'row center wrap' }, ...CATS.map((c) => h('button', { class: 'chip' + (c.id === cat ? ' now' : ''), onclick: () => { sfx('click'); showRanking(c.id, day); } }, c.name)));
+  const days = cat !== 'day' ? null : h('div', { class: 'row center wrap' },
+    ...Array.from({ length: Math.max(save.day, 6) }, (_, i) => i + 1).map((d) => h('button', { class: 'chip small' + (d === day ? ' now' : ''), onclick: () => { sfx('click'); showRanking('day', d); } }, `${d}일차`)));
+  const me = save.rank;
+  const prof = h('p', { class: 'center' }, me ? `내 이름표: ${me.cls}반 · ${me.nick} ` : '아직 랭킹에 참가하지 않았어요. ',
+    h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); profileDialog(() => showRanking(cat, day)); } }, me ? '바꾸기' : '참가하기'));
+  app.append(h('div', { class: 'screen shop-screen' },
+    h('div', { class: 'topline' }, h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showTitle(); } }, '← 돌아가기'), h('h2', {}, '🏆 우리 반 랭킹'), h('span')),
+    RANK_URL ? null : h('p', { class: 'center hint' }, '선생님이 랭킹을 아직 연결하지 않았어요.'),
+    prof, tabs, days, list, creditLine()));
+  if (!RANK_URL) return;
+  if (!me) { list.append(h('p', { class: 'center muted' }, '참가하면 우리 반 순위를 볼 수 있어요.')); return; }
+  list.append(h('p', { class: 'center muted' }, '불러오는 중…'));
+  const res = await call({ act: 'top', cls: me.cls, nick: me.nick, cat, day });
+  if (!list.isConnected) return;
+  list.innerHTML = '';
+  if (!res.ok) { list.append(h('p', { class: 'center' }, res.msg || '불러오지 못했어요.')); return; }
+  const c = CATS.find((x) => x.id === cat);
+  if (!res.rows.length) list.append(h('p', { class: 'center muted' }, '아직 기록이 없어요. 첫 번째 주인공이 되어 봐요!'));
+  res.rows.forEach((r) => list.append(h('div', { class: 'rankrow' + (r.nick === me.nick ? ' me' : '') },
+    h('span', { class: 'rk' }, r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : `${r.rank}`), h('span', { class: 'rn' }, r.nick), h('span', { class: 'rv' }, c.unit(r.v)))));
+  if (res.myRank > 30) list.append(h('p', { class: 'center' }, `내 순위: ${res.myRank}위`));
+}
+
 function showShop(after) {
   leave();
   const list = h('div', { class: 'shop' });
@@ -200,7 +260,8 @@ async function playDay(n, opts = {}) {
   const tutorial = !!opts.tutorial;
   leave();
   app.append(h('div', { class: 'screen title' }, h('p', { class: 'lead' }, '공장 문을 여는 중…')));
-  const Factory = await loadWork().catch(() => null);
+  // 파일이 끊기지도 않고 멈추면(약한 와이파이) 20초 뒤 '다시 열기'를 보여 준다
+  const Factory = await Promise.race([loadWork(), new Promise((r) => setTimeout(() => r(null), 20000))]).catch(() => null);
   app.innerHTML = '';
   if (!Factory) { app.append(h('div', { class: 'screen title' }, h('div', { class: 'card' }, h('p', {}, '공장을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.'), h('button', { class: 'btn', onclick: () => location.reload() }, '다시 열기')))); return; }
   const cfg = dayConfig(n);
@@ -249,6 +310,10 @@ async function playDay(n, opts = {}) {
   // 전개도 콤보
   let netChain = [], bestCombo = 0;
   const netsToday = new Set();
+  // 랭킹: 근무표를 받고, 출고할 때마다 기록을 남긴다(서버가 이 기록으로 점수를 다시 계산한다)
+  const shipLog = [];
+  let rankToken = null, rankStartMsg = '';
+  if (!tutorial && rankOn() && save.rank) call({ act: 'start', ...save.rank, day: n }).then((r) => { if (r.ok) rankToken = r.token; else rankStartMsg = r.msg; });
 
   const say = (t, mood = 'talk') => { bubble.className = 'bubble ' + mood; bubble.textContent = t; bubble.classList.remove('pop'); void bubble.offsetWidth; bubble.classList.add('pop'); };
   const money = (v, why) => {
@@ -916,6 +981,7 @@ async function playDay(n, opts = {}) {
     if (fast) pay += Math.round(o.pay * (save.up.sign ? 0.3 : 0.2) / 100) * 100;
     done++;
     money(pay, fast ? '빠른 배송 팁!' : '');
+    shipLog.push({ t: Math.round(total - timeLeft), item: Object.keys(ITEMS).find((k) => ITEMS[k] === o.item), sketch: o.sketch ? 1 : 0, net: o.net ? o.net.id : null, mistakes: o.mistakes });
     sfx('ok');
     let comboMsg = '';
     if (o.net) {
@@ -1108,6 +1174,14 @@ async function playDay(n, opts = {}) {
     save.best[n] = Math.max(save.best[n] || 0, stars);
     store();
     sfx(pass ? 'clear' : 'no');
+    // 랭킹에 올리기: 점수 대신 출고 기록을 보내고, 서버가 다시 계산해서 순위를 알려 준다
+    const rankLi = !tutorial && rankOn() ? h('li', { class: 'rankline' }, save.rank ? '🏆 랭킹에 올리는 중…' : '🏆 시작 화면의 🏆 랭킹에서 참가하면 우리 반 순위에 올라가요.') : null;
+    if (rankLi && save.rank) {
+      if (!rankToken) rankLi.textContent = '🏆 ' + (rankStartMsg || '랭킹 서버와 연결이 안 돼서 이번 기록은 올라가지 않아요.');
+      else call({ act: 'submit', ...save.rank, day: n, token: rankToken, log: shipLog, earned }).then((r) => {
+        rankLi.textContent = r.ok ? `🏆 ${n}일차 매출 우리 반 ${r.myRank}위! (완벽한 상자 ${r.perfect}개 · 최고 콤보 ${r.bestCombo})` : `🏆 ${r.msg}`;
+      });
+    }
     const left = bagUsed();
     root.append(h('div', { class: 'overlay' }, h('div', { class: 'card big-card' },
       h('p', { class: 'kicker' }, `${n}일차 근무 끝`),
@@ -1118,7 +1192,7 @@ async function playDay(n, opts = {}) {
         h('li', {}, `보낸 상자 ${done}개 · 놓친 주문 ${missed}개`),
         h('li', {}, `📐 오늘 만든 전개도 유형 ${netsToday.size}가지 · 최고 콤보 ${bestCombo} · 지금까지 모은 유형 ${Object.keys(save.nets || {}).length}/11`),
         left ? h('li', {}, `쓰지 못하고 남은 재료 ${left}개`) : null,
-        h('li', {}, `모은 돈 ${won(save.money)}`)),
+        h('li', {}, `모은 돈 ${won(save.money)}`), rankLi),
       h('div', { class: 'row end wrap' },
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); playDay(n); } }, '다시 하기'),
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showShop(showTitle); } }, '🛒 상점'),
@@ -1133,9 +1207,9 @@ async function playDay(n, opts = {}) {
   markNav();
   if (tutorial) tutDraw();
   else say(n === 1 ? '곧 첫 주문이 들어와요! 주문 쪽지가 오면 눌러요.' : '오늘도 힘내요! 주문 쪽지를 눌러 시작해요.');
-  window.__game = { F, inv, get place() { return place; }, get active() { return active; }, get orders() { return orders; }, pick: pickOrder, get cutter() { return cutter; }, doCut, get tutStep() { return tutStep; }, tutDemo: () => tutDemo(), get netChain() { return netChain; }, goTo, useTool, tryShip, endDay, setTime: (t) => { timeLeft = t; } };
+  if (TEST) window.__game = { F, inv, get place() { return place; }, get active() { return active; }, get orders() { return orders; }, pick: pickOrder, get cutter() { return cutter; }, doCut, get tutStep() { return tutStep; }, tutDemo: () => tutDemo(), get netChain() { return netChain; }, goTo, useTool, tryShip, endDay, setTime: (t) => { timeLeft = t; } }; // 점검 봇(?test=1)에서만 게임 속을 연다
 }
 
-window.__factory = { save, showTitle, playDay, showShop };
+if (TEST) window.__factory = { save, showTitle, playDay, showShop }; // F12에서 게임을 조작하지 못하게, 점검 봇(?test=1)에서만 연다
 showTitle();
 setTimeout(() => loadWork().catch(() => {}), 600);

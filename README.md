@@ -53,6 +53,14 @@
 - `models/`: Polyfork 모델(CC BY 4.0) · `sounds/`: Kenney(CC0)
 - 출처: `credits.html`, `THIRD-PARTY-NOTICES.txt`
 
+## 반 랭킹
+
+- 선생님 구글 시트(Apps Script 웹 앱)에 모은다. 연결 방법: `tools/ranking/연결방법.md`
+- 랭킹: 일차별 매출, 최고 콤보, 완벽한 상자(누적), 전개도 수집(11가지 중), 최고 도달 일차
+- 점수 조작 방지: 일회용 근무표 + 출고 기록을 서버(`tools/ranking/Code.gs`)가 다시 계산·검사, 별명 비밀번호, `window.__game`은 `?test=1`에서만
+- `js/data.js`를 바꾸면 `python tools/ranking/sync.py`로 서버 표를 맞추고 Apps Script를 새 버전으로 배포
+- 점검: `sh /d/자동화/playtest/run.sh /d/자동화/cuboid-factory --path '?test=1' --bot tools/bot.js --monkey 20`
+
 ## 나중에
 
 - 도장 큐브 굴리기 퍼즐(보너스)

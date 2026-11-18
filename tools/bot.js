@@ -1,4 +1,5 @@
-// playtest 전용 봇: sh /d/자동화/playtest/run.sh /d/자동화/cuboid-factory --bot tools/bot.js
+// playtest 전용 봇: sh /d/자동화/playtest/run.sh /d/자동화/cuboid-factory --path '?test=1' --bot tools/bot.js
+// (?test=1일 때만 게임 속 window.__game이 열리고, 랭킹에는 올리지 않는다)
 // 일반 상자, 깨지기 쉬운 물건(보호대), 차갑고 세워야 하는 물건(보냉 은박·화살표)을 하나씩 출고해 본다.
 async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));

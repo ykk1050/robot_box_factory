@@ -281,3 +281,15 @@ button { font: inherit; color: inherit; }
 .coach.nudge { animation: nudge .4s; border-color: var(--red); }
 @keyframes nudge { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
 .coach .chint { display: block; font-size: .85em; color: #b4441b; margin-top: 2px; }
+
+/* 반 랭킹 */
+.ranklist { max-width: 620px; width: 100%; margin: 10px auto; display: flex; flex-direction: column; gap: 6px; }
+.rankrow { display: flex; align-items: center; gap: 10px; background: var(--paper); border: 2px solid var(--line); border-radius: 12px; padding: 8px 14px; min-height: 48px; font-size: 18px; }
+.rankrow.me { border-color: var(--teal); background: #e3f4ef; }
+.rankrow .rk { width: 40px; text-align: center; font-family: "Jua", sans-serif; font-size: 22px; }
+.rankrow .rn { flex: 1; font-family: "Jua", sans-serif; }
+.rankrow .rv { font-family: "Jua", sans-serif; color: var(--teal-d); }
+.chip.small { min-height: 44px; font-size: 14px; padding: 6px 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-family: "Jua", sans-serif; font-size: 17px; }
+.tin { font: inherit; font-family: "Gowun Dodum", sans-serif; font-size: 20px; padding: 10px 12px; min-height: 48px; border: 2px solid var(--line); border-radius: 12px; background: #fff; user-select: text; -webkit-user-select: text; }
+.rankline { font-family: "Jua", sans-serif; color: var(--teal-d); }
