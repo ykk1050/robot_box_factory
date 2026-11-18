@@ -2,7 +2,7 @@
 import { ITEMS, CUSTOMERS, COST, BAG, dayConfig, UPGRADES, payFor } from './data.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.013';
+export const VERSION = window.BUILD || 'v1.018';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -163,20 +163,23 @@ function showNetGuide({ chain = [], onClose } = {}) {
 // ---------- 조작 연습(튜토리얼) ----------
 // 한 단계씩 하이라이트하고, 게임에서 일어난 일(ev)이 단계의 until과 같으면 다음으로 넘어간다.
 const TUT_STEPS = [
-  { until: 'pick', target: 'ticket', coach: '주문 쪽지(🧩 큐브 퍼즐)를 눌러 주문을 받아요.', say: '주문 쪽지를 누르면 기사가 작업대로 걸어가요.' },
-  { until: 'add', target: 'sheet', coach: '골판지 위를 손가락으로 끌어서 2×2 정사각형을 그려요.', say: '누른 칸에서 끈 칸까지 직사각형이 그려져요. 손을 떼면 면 하나가 생겨요.' },
-  { until: 'remove', target: 'sheet', skip: true, coach: '그린 면을 한 번 톡 누르면 지워져요. 지워 봐요.', say: '잘못 그린 면은 톡 눌러서 지우면 돼요. 모두 지우려면 "모두 지우기"를 눌러요.' },
-  { until: 'work', target: 'cut', help: true, coach: '2×2 정사각형 6개로 정육면체의 전개도를 그리고 "✂️ 재단하고 접기"를 눌러요.', say: '면끼리는 길이가 같은 변으로 딱 붙여 그려요. 어렵다면 "도와줘"를 눌러요.' },
-  { until: 'drag', target: null, skip: true, coach: '상자 주변의 빈 곳을 손가락으로 끌어서 이리저리 둘러봐요.', say: '화면을 끌면 카메라가 돌아가요. 상자의 뒤쪽도 볼 수 있어요.' },
-  { until: 'roll', target: 'roll', skip: true, coach: '◀ ▶ ▲ ▼ 버튼을 눌러 상자를 굴려요.', say: '상자를 굴리면 아래에 깔린 면도 볼 수 있어요.' },
-  { until: 'at:tape', target: 'nav:tape', coach: '아래 "🩹 테이프 출력기" 버튼을 눌러 걸어가요.', say: '아래 버튼을 누르거나, 3D 화면에서 기계나 바닥을 톡 눌러도 걸어가요.' },
-  { until: 'made:tape', target: 'panel', coach: '− + 로 길이 2cm, 개수 12줄을 맞추고 "출력하기"를 눌러요.', say: '정육면체는 모서리 12개의 길이가 모두 같아요. 첫 줄을 2cm 12줄로 맞춰요.' },
-  { until: 'at:sticker', target: 'nav:sticker', coach: '"🏷 스티커 제작기"로 가요.', say: '이번에는 면에 붙일 스티커를 만들어요.' },
-  { until: 'made:sticker', target: 'panel', coach: '밑면 스티커 2장, 옆면 스티커 4장을 만들어요.', say: '밑면은 서로 평행한 두 면, 옆면은 밑면과 수직인 네 면이에요.' },
-  { until: 'work', target: 'nav:bench', coach: '"🧰 작업대"로 돌아가요.', say: '재료를 챙겼으니 상자에 붙이러 가요.' },
-  { until: 'use', target: 'tools', coach: '오른쪽에서 "🩹 테이프"를 고르고, 상자의 모서리를 톡 눌러요.', say: '도구를 고른 다음 상자의 모서리·면을 누르면 붙어요.' },
-  { until: 'ship', target: 'ship', coach: '굴려 가며 모서리 12개·밑면 2개·옆면 4개를 모두 붙이고 "📦 포장 끝! 출고"를 눌러요.', say: '밑면은 파란 "밑면" 도장이 찍힌 면과 그 면과 평행한 면이에요. 다 붙였으면 출고!' },
+  { id: 'pick', until: 'pick', target: 'ticket', coach: '주문 쪽지(🧩 큐브 퍼즐)를 눌러 주문을 받아요.', say: '손 모양이 보여 주는 대로 따라 해요. 주문 쪽지를 누르면 기사가 작업대로 걸어가요.' },
+  { id: 'draw', until: 'add', target: 'sheet', coach: '파란 점선 칸을 손가락으로 끌어서 2×2 정사각형을 그려요.', say: '누른 칸에서 손을 끌어 간 칸까지 직사각형이 그려져요. 손을 떼면 면 하나가 생겨요.' },
+  { id: 'erase', until: 'remove', target: 'sheet', coach: '방금 그린 면을 한 번 톡 눌러서 지워요.', say: '잘못 그린 면은 톡 눌러서 지우면 돼요.' },
+  { id: 'net', until: 'work', target: 'cut', coach: '점선을 따라 2×2 정사각형 6개를 그리고 "✂️ 재단하고 접기"를 눌러요.', say: '정육면체의 전개도예요. 면끼리는 길이가 같은 변으로 딱 붙여 그려요.' },
+  { id: 'look', until: 'drag', target: null, coach: '상자 주변의 빈 곳을 손가락으로 끌어서 둘러봐요.', say: '화면을 끌면 카메라가 돌아가요. 상자의 뒤쪽도 볼 수 있어요.' },
+  { id: 'roll', until: 'roll', target: 'roll', coach: '◀ ▶ ▲ ▼ 버튼을 눌러 상자를 굴려요.', say: '상자를 굴리면 아래에 깔린 면도 볼 수 있어요.' },
+  { id: 'goTape', until: 'at:tape', target: 'nav:tape', coach: '아래 "🩹 테이프 출력기" 버튼을 눌러 걸어가요.', say: '아래 버튼을 누르거나, 3D 화면에서 기계를 톡 눌러도 걸어가요.' },
+  { id: 'tape', until: 'made:tape', target: 'panel', coach: '− + 로 길이 2cm, 개수 12줄을 맞추고 "출력하기"를 눌러요.', say: '정육면체는 모서리 12개의 길이가 모두 같아요. 첫 줄을 2cm 12줄로 맞춰요.' },
+  { id: 'goSticker', until: 'at:sticker', target: 'nav:sticker', coach: '"🏷 스티커 제작기"로 가요.', say: '이번에는 면에 붙일 스티커를 만들어요.' },
+  { id: 'sticker', until: 'made:sticker', target: 'panel', coach: '밑면 스티커 2장, 옆면 스티커 4장을 만들어요.', say: '밑면은 서로 평행한 두 면, 옆면은 밑면과 수직인 네 면이에요.' },
+  { id: 'back', until: 'work', target: 'nav:bench', coach: '"🧰 작업대"로 돌아가요.', say: '재료를 챙겼으니 상자에 붙이러 가요.' },
+  { id: 'use', until: 'use', target: 'tools', coach: '오른쪽에서 "🩹 테이프"를 고르고, 상자의 모서리를 톡 눌러요.', say: '도구를 고른 다음 상자의 모서리를 누르면 테이프가 붙어요.' },
+  { id: 'ship', until: 'ship', target: 'ship', coach: '굴려 가며 모서리 12개·밑면 2개·옆면 4개를 모두 붙이고 "📦 포장 끝! 출고"를 눌러요.', say: '밑면은 파란 "밑면" 도장이 찍힌 면과 그 면과 평행한 면이에요. 다 붙였으면 출고!' },
 ];
+// 연습 전개도(십자 모양) 안내 칸: 2×2 정사각형 6개
+const TUT_NET = [[1, 0], [0, 1], [1, 1], [2, 1], [3, 1], [1, 2]].map(([x, y]) => ({ x: 5 + 2 * x, y: 3 + 2 * y, w: 2, h: 2 }));
+const HAND_SVG = '<svg width="60" height="80" viewBox="0 0 60 80" aria-hidden="true"><rect x="22" y="2" width="14" height="44" rx="7"/><rect x="34" y="26" width="12" height="22" rx="6"/><rect x="44" y="30" width="11" height="20" rx="5.5"/><rect x="15" y="34" width="40" height="32" rx="12"/><rect x="4" y="36" width="12" height="26" rx="6" transform="rotate(-28 10 49)"/><rect x="20" y="62" width="28" height="16" rx="4"/></svg>';
 
 // ---------- 근무 ----------
 async function playDay(n, opts = {}) {
@@ -200,7 +203,7 @@ async function playDay(n, opts = {}) {
   const cutWrap = h('div', { class: 'cutter hidden' });
   const panel = h('div', { class: 'stpanel hidden' });
   const fx = h('div', { class: 'fx' });
-  const rollBtn = (dir, label, aria) => h('button', { class: 'rbtn r-' + dir, 'aria-label': aria, onclick: () => { if (F.rolling) return; sfx('thud'); F.roll(dir); tutEv('roll'); } }, label);
+  const rollBtn = (dir, label, aria) => h('button', { class: 'rbtn r-' + dir, 'aria-label': aria, onclick: () => { if (F.rolling || tutBlock('roll')) return; sfx('thud'); F.roll(dir); tutEv('roll'); } }, label);
   const rollPad = h('div', { class: 'rollpad hidden' },
     rollBtn('up', '▲', '상자를 멀리 굴리기'), rollBtn('left', '◀', '상자를 왼쪽으로 굴리기'),
     h('span', { class: 'rmid' }, '상자', h('br'), '굴리기'),
@@ -288,22 +291,185 @@ async function playDay(n, opts = {}) {
     const st = TUT_STEPS[tutStep];
     coach.innerHTML = '';
     if (!st) return;
-    coach.append(...[h('span', { class: 'cstep' },`${tutStep + 1}/${TUT_STEPS.length}`), h('span', { class: 'ctext' }, st.coach),
-      st.help ? h('button', { class: 'btn small', onclick: () => {
-        if (place !== 'cut' || !cutter) { say('먼저 작업대에서 골판지를 펼쳐요.'); return; }
-        sfx('click');
-        cutter.set([[2, 0], [0, 2], [2, 2], [4, 2], [6, 2], [2, 4]].map(([x, y]) => ({ x: x + 2, y: y + 2, w: 2, h: 2 })));
-        say('십자 모양 전개도를 그려 줬어요. 이제 "✂️ 재단하고 접기"를 눌러요!');
-      } }, '도와줘') : null,
-      st.skip ? h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); tutNext(); } }, '건너뛰기') : null].filter(Boolean));
+    coach.append(h('span', { class: 'cstep' }, `${tutStep + 1}/${TUT_STEPS.length}`), h('span', { class: 'ctext' }, st.coach));
     if (announce) say(st.say);
     tutGlow();
+    tutGuide();
+    tutDemoNow();
+  }
+  // 골판지 위 점선 안내 칸
+  function tutGuide() {
+    if (!tutorial || !cutter) return;
+    const id = TUT_STEPS[tutStep]?.id;
+    cutter.setGuide(id === 'draw' ? [TUT_NET[2]] : id === 'net' ? TUT_NET : []);
+  }
+  // 시킨 것 말고 다른 조작은 막는다. 막았으면 true
+  function tutBlock(kind, arg) {
+    if (!tutorial || over) return false;
+    const st = TUT_STEPS[tutStep];
+    if (!st) return false;
+    const free = st.id === 'ship';
+    let ok = false, msg = '';
+    if (kind === 'goto') ok = free || ({ goTape: 'tape', tape: 'tape', goSticker: 'sticker', sticker: 'sticker', back: 'bench' })[st.id] === arg;
+    else if (kind === 'floor') ok = free;
+    else if (kind === 'roll') { ok = st.id === 'roll' || st.id === 'use' || free; if (st.id === 'look') msg = '먼저 상자 주변의 빈 곳을 손가락으로 끌어서 둘러봐요.'; }
+    else if (kind === 'tool') { ok = free || (st.id === 'use' && arg === 'tape'); if (st.id === 'use') msg = '지금은 "🩹 테이프"를 골라요.'; }
+    else if (kind === 'ship') ok = free;
+    else if (kind === 'cut') { ok = st.id === 'net'; if (st.id === 'draw' || st.id === 'erase') msg = `아직 재단하지 않아요. ${st.coach}`; }
+    else if (kind === 'make:tape') {
+      const two = arg.filter((r) => r.len === 2).reduce((a, r) => a + r.cnt, 0), other = arg.filter((r) => r.len !== 2).reduce((a, r) => a + r.cnt, 0);
+      ok = free || (st.id === 'tape' && two === 12 && other === 0);
+      if (st.id === 'tape') msg = `길이 2cm 테이프를 12줄만 뽑아요. 지금은 2cm ${two}줄${other ? `, 다른 길이 ${other}줄` : ''}이에요. 다른 길이는 0줄로 두어요.`;
+    } else if (kind === 'make:sticker') {
+      ok = free || (st.id === 'sticker' && arg[0] === 2 && arg[1] === 4 && arg[2] === 0);
+      if (st.id === 'sticker') msg = `밑면 스티커 2장, 옆면 스티커 4장, 화살표 0장으로 맞춰요. 지금은 ${arg[0]}장, ${arg[1]}장, ${arg[2]}장이에요.`;
+    } else if (kind === 'make:guard') ok = free;
+    else if (kind === 'draw') {
+      if (st.id === 'draw') { ok = arg.w === 2 && arg.h === 2; msg = `가로 2칸, 세로 2칸인 정사각형으로 그려요. 방금은 ${arg.w}×${arg.h}이었어요.`; }
+      else if (st.id === 'erase') { ok = false; msg = '지금은 그리지 말고, 그려 둔 면을 톡 눌러서 지워요.'; }
+      else ok = true;
+    }
+    if (ok) return false;
+    sfx('no');
+    say(msg || `지금은 이것부터 해요: ${st.coach}`, 'sad');
+    coach.classList.remove('nudge'); void coach.offsetWidth; coach.classList.add('nudge');
+    tutDemoNow();
+    return true;
+  }
+
+  // ---------- 손 모양 안내(실루엣) ----------
+  const hand = h('div', { class: 'ghand hidden' });
+  hand.innerHTML = HAND_SVG;
+  let demoTimer = null, rippleTimer = null, rollTry = 0;
+  const centerOf = (el) => { if (!el || !el.isConnected || el.offsetParent === null) return null; const r = el.getBoundingClientRect(); return r.width ? [r.left + r.width / 2, r.top + r.height / 2] : null; };
+  const sheetXY = (x, y) => { const m = cutter && cutter.svg.getScreenCTM(); return m ? [m.a * x + m.e, m.d * y + m.f] : null; };
+  const onCanvas = (p) => p && document.elementFromPoint(p[0], p[1])?.tagName === 'CANVAS';
+  const walkingTo = (id) => place === 'walk' && where === id;
+  const tap = (p) => (p ? { tap: p } : null);
+  function tutDemo() {
+    const st = TUT_STEPS[tutStep];
+    if (!st || paused || over || place === 'busy') return null;
+    const sheetOpen = place === 'cut' && cutter && !cutWrap.classList.contains('hidden');
+    const sx = (fn) => (sheetOpen ? fn() : place === 'cut' ? tap(centerOf(side.querySelector('.btn.big'))) : null);
+    switch (st.id) {
+      case 'pick': return tap(centerOf(tutTarget('ticket')));
+      case 'draw': return sx(() => { const g = TUT_NET[2]; return { drag: [sheetXY(g.x + 0.5, g.y + 0.5), sheetXY(g.x + g.w - 0.5, g.y + g.h - 0.5)] }; });
+      case 'erase': return sx(() => { const r = cutter.rects[0]; return r ? tap(sheetXY(r.x + r.w / 2, r.y + r.h / 2)) : null; });
+      case 'net': return sx(() => {
+        const g = cutter.rects.length < 6 && TUT_NET.find((q) => !cutter.rects.some((r) => r.x < q.x + q.w && q.x < r.x + r.w && r.y < q.y + q.h && q.y < r.y + r.h));
+        return g ? { drag: [sheetXY(g.x + 0.5, g.y + 0.5), sheetXY(g.x + g.w - 0.5, g.y + g.h - 0.5)] } : tap(centerOf(tutTarget('cut')));
+      });
+      case 'look': {
+        const b = place === 'work' && F.boxScreen();
+        if (!b) return null;
+        const y = b[1] - 110;
+        return { drag: [[b[0] - 110, y], [b[0] + 110, y]] };
+      }
+      case 'roll': return place === 'work' ? tap(centerOf(rollPad.querySelector('.r-right'))) : null;
+      case 'goTape': return walkingTo('tape') ? null : tap(centerOf(navBtns.tape));
+      case 'goSticker': return walkingTo('sticker') ? null : tap(centerOf(navBtns.sticker));
+      case 'back': return walkingTo('bench') ? null : tap(centerOf(navBtns.bench));
+      case 'tape': {
+        if (place !== 'station') return walkingTo('tape') ? null : tap(centerOf(navBtns.tape));
+        const rows = [...panel.querySelectorAll('.srow')];
+        const num = (row, k) => parseInt(row.querySelectorAll('.snum')[k].textContent, 10);
+        const btn = (row, k) => centerOf(row.querySelectorAll('.sbtn')[k]);
+        if (num(rows[0], 0) !== 2) return tap(btn(rows[0], num(rows[0], 0) > 2 ? 0 : 1));
+        if (num(rows[0], 1) !== 12) return tap(btn(rows[0], num(rows[0], 1) > 12 ? 2 : 3));
+        for (const r of rows.slice(1)) if (num(r, 1) > 0) return tap(btn(r, 2));
+        return tap(centerOf(panel.querySelector('.btn.warn')));
+      }
+      case 'sticker': {
+        if (place !== 'station') return walkingTo('sticker') ? null : tap(centerOf(navBtns.sticker));
+        const rows = [...panel.querySelectorAll('.srow')];
+        const want = [2, 4, 0];
+        for (let i = 0; i < 3; i++) {
+          const v = parseInt(rows[i].querySelector('.snum').textContent, 10);
+          if (v !== want[i]) return tap(centerOf(rows[i].querySelectorAll('.sbtn')[v > want[i] ? 0 : 1]));
+        }
+        return tap(centerOf(panel.querySelector('.btn.warn')));
+      }
+      case 'use': return packDemo(['tape']);
+      case 'ship': return packDemo(['tape', 'base', 'side']);
+      default: return null;
+    }
+  }
+  // 포장: 필요한 도구 고르기 → 보이는 모서리/면 누르기 → 안 보이면 굴리기 → 다 붙였으면 출고
+  function packDemo(needs) {
+    const o = active;
+    if (!o || place !== 'work' || !F.edges) return null;
+    for (const need of needs) {
+      const rest = need === 'tape' ? F.edges.filter((e) => !o.taped.has(e.id))
+        : F.faces.filter((f) => (need === 'base' ? f.role !== 'side' : f.role === 'side') && !o.baseS.has(f.id) && !o.sideS.has(f.id));
+      if (!rest.length) continue;
+      const have = need === 'tape' ? Object.values(inv.tape).some((c) => c > 0) : inv[need] > 0;
+      if (!have) return tap(centerOf(navBtns[need === 'tape' ? 'tape' : 'sticker']));
+      if (tool !== need) return tap(centerOf(side.querySelector(`.tool[data-tool="${need}"]`)));
+      for (const t of rest) {
+        const p = F.screenOf(need === 'tape' ? F.edgeHits[t.id] : F.faceHits[t.id]);
+        if (!onCanvas(p)) continue;
+        const hit = F.pick(p[0], p[1]);
+        if (hit && (need === 'tape' ? hit.type === 'edge' && hit.edge.id === t.id : hit.type === 'face' && hit.id === t.id)) { rollTry = 0; return tap(p); }
+      }
+      // 보이는 곳이 없으면 굴리기: ▶와 ▲를 번갈아 써야 어떤 면이든 앞으로 나온다
+      return tap(centerOf(rollPad.querySelector(rollTry++ % 2 ? '.r-up' : '.r-right')));
+    }
+    return needs.length > 1 ? tap(centerOf(tutTarget('ship'))) : null;
+  }
+  function showDemo(d) {
+    hand.getAnimations().forEach((a) => a.cancel());
+    clearTimeout(rippleTimer);
+    const ok = d && (d.tap ? d.tap : d.drag && d.drag[0] && d.drag[1]);
+    if (!ok) { hand.classList.add('hidden'); return; }
+    hand.classList.remove('hidden');
+    const R = root.getBoundingClientRect();
+    const at = (p, sc = 1) => `translate(${p[0] - R.left}px, ${p[1] - R.top}px) scale(${sc})`;
+    if (d.tap) {
+      const p = d.tap, from = [p[0] + 40, p[1] + 50];
+      hand.animate([
+        { transform: at(from), opacity: 0 },
+        { transform: at(p), opacity: 1, offset: 0.35 },
+        { transform: at(p, 0.82), opacity: 1, offset: 0.48 },
+        { transform: at(p), opacity: 1, offset: 0.6 },
+        { transform: at(p), opacity: 1, offset: 0.85 },
+        { transform: at(p), opacity: 0 },
+      ], { duration: 1600, easing: 'ease-out', fill: 'forwards' });
+      rippleTimer = setTimeout(() => ripple(p), 730);
+    } else {
+      const [a, b] = d.drag;
+      hand.animate([
+        { transform: at([a[0] + 30, a[1] + 40]), opacity: 0 },
+        { transform: at(a), opacity: 1, offset: 0.2 },
+        { transform: at(a, 0.82), opacity: 1, offset: 0.3 },
+        { transform: at(b, 0.82), opacity: 1, offset: 0.72 },
+        { transform: at(b), opacity: 1, offset: 0.82 },
+        { transform: at(b), opacity: 0 },
+      ], { duration: 2000, easing: 'ease-in-out', fill: 'forwards' });
+      rippleTimer = setTimeout(() => ripple(a), 560);
+    }
+  }
+  function ripple(p) {
+    const R = root.getBoundingClientRect();
+    const r = h('div', { class: 'gripple' });
+    r.style.left = `${p[0] - R.left}px`; r.style.top = `${p[1] - R.top}px`;
+    root.append(r);
+    r.animate([{ transform: 'scale(.3)', opacity: 0.9 }, { transform: 'scale(1.5)', opacity: 0 }], { duration: 600, easing: 'ease-out' }).onfinish = () => r.remove();
+  }
+  function tutDemoNow() {
+    if (!tutorial) return;
+    clearTimeout(demoTimer);
+    const loop = () => { if (over) { showDemo(null); return; } showDemo(tutDemo()); demoTimer = setTimeout(loop, 2300); };
+    demoTimer = setTimeout(loop, 450);
   }
   function tutNext() { tutStep++; tutDraw(); }
+  let tutPending = -1; // 같은 단계가 두 번 넘어가지 않게(빠르게 두 번 눌러도 한 단계만)
   function tutEv(ev) {
     if (!tutorial || over) return;
     const st = TUT_STEPS[tutStep];
-    if (st && st.until === ev) { sfx('ok'); setTimeout(tutNext, 350); }
+    if (!st || st.until !== ev || tutPending === tutStep) return;
+    tutPending = tutStep;
+    sfx('ok');
+    setTimeout(() => { if (tutStep === tutPending) tutNext(); }, 350);
   }
   function finishTutorial() {
     over = true;
@@ -311,6 +477,7 @@ async function playDay(n, opts = {}) {
     save.tutorialDone = true; store();
     sfx('clear');
     root.querySelectorAll('.tut-glow').forEach((e) => e.classList.remove('tut-glow'));
+    clearTimeout(demoTimer); showDemo(null);
     root.append(h('div', { class: 'overlay' }, h('div', { class: 'card big-card' },
       h('p', { class: 'kicker' }, '조작 연습 끝'),
       h('h2', {}, '이제 출근할 준비가 됐어요! 🎉'),
@@ -351,8 +518,9 @@ async function playDay(n, opts = {}) {
     cutWrap.classList.add('hidden'); panel.classList.add('hidden'); rollPad.classList.add('hidden');
     F.mode = 'walk'; F.allowRotate = false; F.pickables = [];
   }
-  async function goTo(id) {
+  async function goTo(id, internal = false) {
     if (over || place === 'busy') return;
+    if (!internal && tutBlock('goto', id)) return;
     closeAll();
     place = 'walk'; where = id; markNav();
     F.view('follow');
@@ -363,6 +531,7 @@ async function playDay(n, opts = {}) {
   }
   async function walkFloor(x, z) {
     if (place === 'busy') return;
+    if (tutBlock('floor')) return;
     closeAll();
     place = 'walk'; where = null; markNav();
     F.view('follow');
@@ -443,7 +612,7 @@ async function playDay(n, opts = {}) {
     drawTickets();
     F.showItem(o.item);
     say(`${o.item.name} 주문! 작업대로 가서 골판지를 재단해요.`);
-    goTo('bench');
+    goTo('bench', true);
     tutEv('pick');
   }
 
@@ -469,20 +638,21 @@ async function playDay(n, opts = {}) {
       h('span', { class: 'ctitle' }, '✂️ 재단기 · 손가락으로 끌어서 면을 그려요'),
       hasDie ? h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); cutter.set(save.dies[dieKey]); say('금형으로 한 번에 그렸어요!'); } }, '🗂 금형') : null,
       h('button', { class: 'btn ghost small', onclick: () => openNetGuide() }, '📐 유형'),
-      h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); cutter.set([]); } }, '모두 지우기'),
+      h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); const had = cutter.rects.length; cutter.set([]); if (had) tutEv('remove'); } }, '모두 지우기'),
       h('button', { class: 'btn warn', onclick: doCut }, '✂️ 재단하고 접기')));
     const host = h('div', { class: 'sheet-host' });
     cutWrap.append(host);
     cutter = new Cutter(host, {
       onChange: (k, r) => {
         if (k === 'overlap') say('다른 면과 겹치게 그릴 수 없어요.');
+        else if (k === 'add' && tutBlock('draw', r)) { cutter.rects.pop(); cutter.draw(); }
         else if (k === 'add') { sfx('click'); say(`${r.w === r.h ? `한 변이 ${r.w}cm인 정사각형` : `가로 ${r.w}cm, 세로 ${r.h}cm인 직사각형`} 면을 그렸어요. 그린 면을 한 번 누르면 지워져요.`); tutEv('add'); }
         else { sfx('click'); if (k === 'remove') tutEv('remove'); }
       },
     });
     if (keep) cutter.set(keep);
     setSide(h('p', { class: 'hint' }, `주문서의 ${new Set(o.item.d).size === 1 ? '정육면체' : '직육면체'}와 크기가 같은 전개도를 그려요. 잘리지 않은 모서리는 점선, 잘린 모서리는 실선으로 나타나요.`), comboView(), invView());
-    if (tutorial) { tutGlow(); if (keep) return; tutDraw(); return; }
+    if (tutorial) { tutGlow(); tutGuide(); if (keep) return; tutDraw(); return; }
     if (keep) return;
     if (o.item === ITEMS.puzzle && n === 1 && done === 0) say('큐브 퍼즐은 가로·세로·높이가 모두 2cm인 정육면체에 넣어요. 한 변이 2cm인 정사각형 6개로 정육면체의 전개도를 그려 봐요!');
     else if (o.sketch) say('겨냥도 주문이에요! 실선과 점선으로 그린 모서리의 길이를 보고 가로·세로·높이를 찾아서 전개도를 그려요. 보이지 않는 모서리(점선)도 모서리예요.');
@@ -491,6 +661,7 @@ async function playDay(n, opts = {}) {
 
   async function doCut() {
     if (place !== 'cut' || !active) return;
+    if (tutBlock('cut')) return;
     const rects = cutter.rects.map((r) => ({ ...r }));
     if (!rects.length) { say('먼저 골판지에 면을 그려요.'); return; }
     const A = analyzeNet(rects, active.item.d);
@@ -578,7 +749,7 @@ async function playDay(n, opts = {}) {
     if (place !== 'work') return;
     const o = active;
     const tapeCount = Object.values(inv.tape).reduce((a, b) => a + b, 0);
-    const tb = (id, label, count) => h('button', { class: 'tool' + (tool === id ? ' sel' : ''), onclick: () => { tool = id; F.setTool(id); sfx('click'); drawWorkSide(); hintTool(); } }, label, h('small', {}, count));
+    const tb = (id, label, count) => h('button', { class: 'tool' + (tool === id ? ' sel' : ''), 'data-tool': id, onclick: () => { if (tutBlock('tool', id)) return; tool = id; F.setTool(id); sfx('click'); drawWorkSide(); hintTool(); } }, label, h('small', {}, count));
     setSide(
       h('div', { class: 'tools' },
         tb('tape', '🩹 테이프', `${tapeCount}줄`),
@@ -672,6 +843,7 @@ async function playDay(n, opts = {}) {
   function tryShip() {
     const o = active;
     if (!o || place !== 'work') return;
+    if (tutBlock('ship')) return;
     sfx('click');
     const miss = [];
     if (o.taped.size < 12) miss.push('테이프가 안 붙은 모서리');
@@ -751,6 +923,7 @@ async function playDay(n, opts = {}) {
         sum,
         h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
           const L = rows.reduce((s, r) => s + r.len * r.cnt, 0);
+          if (tutBlock('make:tape', rows)) return;
           if (!L) { say('개수를 넣어야 테이프가 나와요.'); return; }
           if (!bagFits(rows.reduce((s, r) => s + r.cnt, 0))) return;
           rows.forEach((r) => { if (r.cnt) inv.tape[r.len] = (inv.tape[r.len] || 0) + r.cnt; });
@@ -770,6 +943,7 @@ async function playDay(n, opts = {}) {
         h('div', { class: 'srow' }, h('span', {}, '⬆️ 화살표(이쪽이 위)'), stepper(0, 0, 12, (v) => { u = v; upd(); }, '장')),
         sum,
         h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
+          if (tutBlock('make:sticker', [b, s, u])) return;
           if (!b && !s && !u) { say('몇 장 만들지 넣어요.'); return; }
           if (!bagFits(b + s + u)) return;
           inv.base += b; inv.side += s; inv.up += u;
@@ -788,6 +962,7 @@ async function playDay(n, opts = {}) {
         h('div', { class: 'srow' }, h('span', {}, '🧊 보냉 은박'), stepper(0, 0, 12, (v) => { fo = v; upd(); }, '장')),
         sum,
         h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
+          if (tutBlock('make:guard')) return;
           if (!g && !fo) { say('몇 개 가져갈지 넣어요.'); return; }
           if (!bagFits(g + fo)) return;
           inv.guard += g; inv.foil += fo;
@@ -906,14 +1081,15 @@ async function playDay(n, opts = {}) {
         pass ? h('button', { class: 'btn', onclick: () => { sfx('click'); showTitle(); showIntro(n + 1); } }, `${n + 1}일차로 ▶`) : null))));
   }
 
-  cleanup = () => { over = true; clearInterval(timer); F.dispose(); };
+  if (tutorial) root.append(hand);
+  cleanup = () => { over = true; clearInterval(timer); clearTimeout(demoTimer); F.dispose(); };
   setSideIdle();
   drawHud();
   drawTickets();
   markNav();
   if (tutorial) tutDraw();
   else say(n === 1 ? '곧 첫 주문이 들어와요! 주문 쪽지가 오면 눌러요.' : '오늘도 힘내요! 주문 쪽지를 눌러 시작해요.');
-  window.__game = { F, inv, get place() { return place; }, get active() { return active; }, get orders() { return orders; }, pick: pickOrder, get cutter() { return cutter; }, doCut, get tutStep() { return tutStep; }, get netChain() { return netChain; }, goTo, useTool, tryShip, endDay, setTime: (t) => { timeLeft = t; } };
+  window.__game = { F, inv, get place() { return place; }, get active() { return active; }, get orders() { return orders; }, pick: pickOrder, get cutter() { return cutter; }, doCut, get tutStep() { return tutStep; }, tutDemo: () => tutDemo(), get netChain() { return netChain; }, goTo, useTool, tryShip, endDay, setTime: (t) => { timeLeft = t; } };
 }
 
 window.__factory = { save, showTitle, playDay, showShop };

@@ -57,9 +57,10 @@ export class Cutter {
     host.append(this.svg);
     const bg = S('rect', { x: 0, y: 0, width: cols, height: rows, fill: '#e8c79a', rx: 0.15 });
     this.svg.append(bg);
-    this.gGrid = S('g'); this.gPieces = S('g'); this.gLines = S('g'); this.gGhost = S('g');
-    this.gLines.style.pointerEvents = 'none'; this.gGhost.style.pointerEvents = 'none';
-    this.svg.append(this.gGrid, this.gPieces, this.gLines, this.gGhost);
+    this.gGrid = S('g'); this.gGuide = S('g'); this.gPieces = S('g'); this.gLines = S('g'); this.gGhost = S('g');
+    this.gLines.style.pointerEvents = 'none'; this.gGhost.style.pointerEvents = 'none'; this.gGuide.style.pointerEvents = 'none';
+    this.guide = [];
+    this.svg.append(this.gGrid, this.gGuide, this.gPieces, this.gLines, this.gGhost);
     for (let x = 0; x <= cols; x++) this.gGrid.append(S('line', { x1: x, y1: 0, x2: x, y2: rows, stroke: '#cfa875', 'stroke-width': 0.025 }));
     for (let y = 0; y <= rows; y++) this.gGrid.append(S('line', { x1: 0, y1: y, x2: cols, y2: y, stroke: '#cfa875', 'stroke-width': 0.025 }));
     this.gGrid.style.pointerEvents = 'none';
@@ -118,10 +119,14 @@ export class Cutter {
     this.gGhost.append(t);
   }
 
+  // 연습용 안내 칸(점선): 그 위에 따라 그리면 된다
+  setGuide(rects) { this.guide = rects.map((r) => ({ ...r })); this.draw(); }
+
   set(rects) { this.rects = rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h })); this.red.clear(); this.draw(); }
 
   draw() {
-    this.gPieces.innerHTML = ''; this.gLines.innerHTML = '';
+    this.gPieces.innerHTML = ''; this.gLines.innerHTML = ''; this.gGuide.innerHTML = '';
+    this.guide.forEach((g) => this.gGuide.append(S('rect', { x: g.x + 0.06, y: g.y + 0.06, width: g.w - 0.12, height: g.h - 0.12, fill: '#2f6fde1a', stroke: '#2f6fde', 'stroke-width': 0.07, 'stroke-dasharray': '0.25 0.18', rx: 0.08 })));
     this.rects.forEach((r, i) => {
       this.gPieces.append(S('rect', { x: r.x, y: r.y, width: r.w, height: r.h, fill: this.red.has(i) ? '#f2a093' : '#fbe9cf' }));
       const t = S('text', { x: r.x + r.w / 2, y: r.y + r.h / 2 + 0.22, 'font-size': Math.min(0.75, Math.min(r.w, r.h) * 0.45), 'text-anchor': 'middle', fill: '#8a5a2b', 'font-family': 'Jua, sans-serif' });

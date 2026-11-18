@@ -602,6 +602,20 @@ export class Factory {
     this.setTool(null);
   }
 
+  // 3D 물체의 화면 좌표(client px). 화면 밖이면 null — 연습의 손 모양 안내용
+  _toScreen(v) {
+    v.project(this.camera);
+    if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) return null;
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height];
+  }
+  screenOf(obj) { return obj ? this._toScreen(obj.getWorldPosition(new THREE.Vector3())) : null; }
+  boxScreen() {
+    if (!this.A || !this.rig) return null;
+    this.rig.group.updateMatrixWorld(true);
+    return this._toScreen(this.rig.group.localToWorld(new THREE.Vector3(...this.A.center)));
+  }
+
   // 지금 쓰는 도구에 맞는 것만 누를 수 있게
   setTool(tool) {
     this.pickables = tool === 'tape' ? this.edgeHits : tool === 'guard' ? this.cornerHits : ['base', 'side', 'foil', 'up'].includes(tool) ? this.faceHits : [];
