@@ -2,7 +2,7 @@
 import { ITEMS, CUSTOMERS, COST, BAG, dayConfig, UPGRADES, payFor } from './data.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.018';
+export const VERSION = window.BUILD || 'v1.020';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -203,7 +203,7 @@ async function playDay(n, opts = {}) {
   const cutWrap = h('div', { class: 'cutter hidden' });
   const panel = h('div', { class: 'stpanel hidden' });
   const fx = h('div', { class: 'fx' });
-  const rollBtn = (dir, label, aria) => h('button', { class: 'rbtn r-' + dir, 'aria-label': aria, onclick: () => { if (F.rolling || tutBlock('roll')) return; sfx('thud'); F.roll(dir); tutEv('roll'); } }, label);
+  const rollBtn = (dir, label, aria) => h('button', { class: 'rbtn r-' + dir, 'aria-label': aria, onclick: () => { if (F.rolling || tutBlock('roll')) return; sfx('thud'); F.roll(dir); hiddenSeen.clear(); tutEv('roll'); tutDemoNow(); } }, label);
   const rollPad = h('div', { class: 'rollpad hidden' },
     rollBtn('up', '▲', '상자를 멀리 굴리기'), rollBtn('left', '◀', '상자를 왼쪽으로 굴리기'),
     h('span', { class: 'rmid' }, '상자', h('br'), '굴리기'),
@@ -283,7 +283,7 @@ async function playDay(n, opts = {}) {
     if (!tutorial) return;
     const st = TUT_STEPS[tutStep];
     const el = st && tutTarget(st.target);
-    root.querySelectorAll('.tut-glow').forEach((e) => { if (e !== el) e.classList.remove('tut-glow'); });
+    root.querySelectorAll('.tut-glow').forEach((e) => { if (e !== el && !(rollHint && e === rollPad)) e.classList.remove('tut-glow'); });
     if (el && !el.classList.contains('tut-glow')) el.classList.add('tut-glow');
   }
   function tutDraw(announce = true) {
@@ -340,13 +340,15 @@ async function playDay(n, opts = {}) {
   // ---------- 손 모양 안내(실루엣) ----------
   const hand = h('div', { class: 'ghand hidden' });
   hand.innerHTML = HAND_SVG;
-  let demoTimer = null, rippleTimer = null, rollTry = 0;
+  let demoTimer = null, rippleTimer = null, rollTry = 0, needRoll = null, rollHint = false;
+  const hiddenSeen = new Set(); // 지금 보는 방향에서 '도구를 들고 봤더니 안 보였던' 일. 굴리거나 둘러보면 비운다
   const centerOf = (el) => { if (!el || !el.isConnected || el.offsetParent === null) return null; const r = el.getBoundingClientRect(); return r.width ? [r.left + r.width / 2, r.top + r.height / 2] : null; };
   const sheetXY = (x, y) => { const m = cutter && cutter.svg.getScreenCTM(); return m ? [m.a * x + m.e, m.d * y + m.f] : null; };
   const onCanvas = (p) => p && document.elementFromPoint(p[0], p[1])?.tagName === 'CANVAS';
   const walkingTo = (id) => place === 'walk' && where === id;
   const tap = (p) => (p ? { tap: p } : null);
   function tutDemo() {
+    needRoll = null;
     const st = TUT_STEPS[tutStep];
     if (!st || paused || over || place === 'busy') return null;
     const sheetOpen = place === 'cut' && cutter && !cutWrap.classList.contains('hidden');
@@ -398,23 +400,38 @@ async function playDay(n, opts = {}) {
   function packDemo(needs) {
     const o = active;
     if (!o || place !== 'work' || !F.edges) return null;
+    // 남은 일마다 지금 화면에 보이는(눌러서 맞는) 곳을 찾는다
+    const todo = [];
     for (const need of needs) {
       const rest = need === 'tape' ? F.edges.filter((e) => !o.taped.has(e.id))
         : F.faces.filter((f) => (need === 'base' ? f.role !== 'side' : f.role === 'side') && !o.baseS.has(f.id) && !o.sideS.has(f.id));
       if (!rest.length) continue;
-      const have = need === 'tape' ? Object.values(inv.tape).some((c) => c > 0) : inv[need] > 0;
-      if (!have) return tap(centerOf(navBtns[need === 'tape' ? 'tape' : 'sticker']));
-      if (tool !== need) return tap(centerOf(side.querySelector(`.tool[data-tool="${need}"]`)));
+      let vis = null;
       for (const t of rest) {
         const p = F.screenOf(need === 'tape' ? F.edgeHits[t.id] : F.faceHits[t.id]);
         if (!onCanvas(p)) continue;
         const hit = F.pick(p[0], p[1]);
-        if (hit && (need === 'tape' ? hit.type === 'edge' && hit.edge.id === t.id : hit.type === 'face' && hit.id === t.id)) { rollTry = 0; return tap(p); }
+        if (hit && (need === 'tape' ? hit.type === 'edge' && hit.edge.id === t.id : hit.type === 'face' && hit.id === t.id)) { vis = p; break; }
       }
-      // 보이는 곳이 없으면 굴리기: ▶와 ▲를 번갈아 써야 어떤 면이든 앞으로 나온다
-      return tap(centerOf(rollPad.querySelector(rollTry++ % 2 ? '.r-up' : '.r-right')));
+      todo.push({ need, vis, first: rest[0] });
     }
-    return needs.length > 1 ? tap(centerOf(tutTarget('ship'))) : null;
+    if (!todo.length) return needs.length > 1 ? tap(centerOf(tutTarget('ship'))) : null;
+    // 보이는 일이 있으면 그것부터(지금 든 도구 우선), 하나도 안 보일 때만 굴리라고 한다
+    // 모서리·면은 그 도구를 들었을 때만 눌리므로, 보이는지는 지금 든 도구로만 알 수 있다.
+    // 지금 도구로 할 게 보이면 그것, 아니면 아직 확인 안 한 다른 도구로 바꿔 보고, 다 안 보일 때만 굴리라고 한다.
+    todo.forEach((j) => { if (j.need === tool && !j.vis) hiddenSeen.add(j.need); });
+    const job = todo.find((j) => j.need === tool && j.vis) || todo.find((j) => j.need !== tool && !hiddenSeen.has(j.need))
+      || todo.find((j) => j.need === tool) || todo[0];
+    if (job.need === tool && !job.vis) needRoll = job.need;
+    const need = job.need;
+    const have = need === 'tape' ? Object.values(inv.tape).some((c) => c > 0) : inv[need] > 0;
+    if (!have) { needRoll = null; return tap(centerOf(navBtns[need === 'tape' ? 'tape' : 'sticker'])); }
+    if (tool !== need) return tap(centerOf(side.querySelector(`.tool[data-tool="${need}"]`)));
+    if (job.vis) { rollTry = 0; return tap(job.vis); }
+    if (!needRoll) return null;
+    // 보이는 곳이 없으면 굴리기: 남은 것 하나를 카메라 쪽으로 가장 잘 돌려 주는 버튼을 짚는다
+    const t = job.first, dir = F.rollDirFor(need === 'tape' ? F.edgeHits[t.id] : F.faceHits[t.id]);
+    return tap(centerOf(rollPad.querySelector(dir ? '.r-' + dir : rollTry++ % 2 ? '.r-up' : '.r-right')));
   }
   function showDemo(d) {
     hand.getAnimations().forEach((a) => a.cancel());
@@ -455,10 +472,22 @@ async function playDay(n, opts = {}) {
     root.append(r);
     r.animate([{ transform: 'scale(.3)', opacity: 0.9 }, { transform: 'scale(1.5)', opacity: 0 }], { duration: 600, easing: 'ease-out' }).onfinish = () => r.remove();
   }
+  // 눌러야 할 곳이 화면에 안 보이면: 안내 줄에 '굴려서 보이게' 문구를 붙이고, 박스봇이 한 번 말하고, 굴리기 버튼을 반짝이게 한다
+  function setRollHint(need) {
+    const on = !!need;
+    const el = coach.querySelector('.chint');
+    if (!on) { el?.remove(); if (rollHint) rollPad.classList.remove('tut-glow'); rollHint = false; return; }
+    const what = need === 'tape' ? '테이프를 붙일 모서리가' : need === 'base' ? '밑면 스티커를 붙일 면이' : '옆면 스티커를 붙일 면이';
+    const text = `👀 ${what} 안 보이면 ◀ ▶ ▲ ▼로 상자를 굴려서 보이게 해요.`;
+    if (el) el.textContent = text; else coach.querySelector('.ctext')?.append(h('span', { class: 'chint' }, text));
+    rollPad.classList.add('tut-glow');
+    if (!rollHint) say(`지금 보이는 쪽에는 ${what.slice(0, -1)} 없어요. 아래 ◀ ▶ ▲ ▼ 버튼으로 상자를 굴려서 보이게 해요.`);
+    rollHint = true;
+  }
   function tutDemoNow() {
     if (!tutorial) return;
     clearTimeout(demoTimer);
-    const loop = () => { if (over) { showDemo(null); return; } showDemo(tutDemo()); demoTimer = setTimeout(loop, 2300); };
+    const loop = () => { if (over) { showDemo(null); return; } if (F.rolling) { demoTimer = setTimeout(loop, 120); return; } showDemo(tutDemo()); setRollHint(needRoll); demoTimer = setTimeout(loop, 2300); };
     demoTimer = setTimeout(loop, 450);
   }
   function tutNext() { tutStep++; tutDraw(); }
@@ -545,7 +574,7 @@ async function playDay(n, opts = {}) {
     else openStation(id);
     markNav();
   }
-  F.onDrag = () => tutEv('drag');
+  F.onDrag = () => { hiddenSeen.clear(); tutEv('drag'); tutDemoNow(); };
   F.onTap = (hit) => {
     if (!hit || over || paused) return;
     if (F.mode === 'walk') {
@@ -749,7 +778,7 @@ async function playDay(n, opts = {}) {
     if (place !== 'work') return;
     const o = active;
     const tapeCount = Object.values(inv.tape).reduce((a, b) => a + b, 0);
-    const tb = (id, label, count) => h('button', { class: 'tool' + (tool === id ? ' sel' : ''), 'data-tool': id, onclick: () => { if (tutBlock('tool', id)) return; tool = id; F.setTool(id); sfx('click'); drawWorkSide(); hintTool(); } }, label, h('small', {}, count));
+    const tb = (id, label, count) => h('button', { class: 'tool' + (tool === id ? ' sel' : ''), 'data-tool': id, onclick: () => { if (tutBlock('tool', id)) return; tool = id; F.setTool(id); sfx('click'); drawWorkSide(); hintTool(); tutDemoNow(); } }, label, h('small', {}, count));
     setSide(
       h('div', { class: 'tools' },
         tb('tape', '🩹 테이프', `${tapeCount}줄`),
@@ -838,6 +867,7 @@ async function playDay(n, opts = {}) {
     } else return;
     drawWorkSide();
     tutEv('use');
+    tutDemoNow();
   }
 
   function tryShip() {

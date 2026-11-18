@@ -278,3 +278,4 @@ button { font: inherit; color: inherit; }
 .gripple { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; border: 4px solid var(--yellow); z-index: 39; pointer-events: none; }
 .coach.nudge { animation: nudge .4s; border-color: var(--red); }
 @keyframes nudge { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+.coach .chint { display: block; font-size: .85em; color: #b4441b; margin-top: 2px; }

@@ -532,15 +532,35 @@ export class Factory {
     this.pivot.position.y = newHalf;
   }
 
-  async roll(dir) {
-    if (this.rolling || !this.pivot) return;
-    this.rolling = true;
+  // 굴리는 방향(◀▶▲▼)의 회전축(월드). 상자는 이 축으로 90° 돈다
+  _rollAxis(dir) {
     const yaw = this.cam.yaw;
     const f = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     const r = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
     const v = { up: f, down: f.clone().negate(), right: r, left: r.clone().negate() }[dir];
     const d = Math.abs(v.x) > Math.abs(v.z) ? new THREE.Vector3(Math.sign(v.x), 0, 0) : new THREE.Vector3(0, 0, Math.sign(v.z));
-    const axis = new THREE.Vector3(0, 1, 0).cross(d).normalize();
+    return new THREE.Vector3(0, 1, 0).cross(d).normalize();
+  }
+
+  // 안 보이는 모서리·면을 카메라 쪽으로 가장 잘 돌려 주는 굴리기 방향 — 연습의 손 모양 안내용
+  rollDirFor(obj) {
+    if (!obj || !this.pivot || !this.A) return null;
+    this.rig.group.updateMatrixWorld(true);
+    const c = this.rig.group.localToWorld(new THREE.Vector3(...this.A.center));
+    const n = obj.getWorldPosition(new THREE.Vector3()).sub(c);
+    const eye = this.camera.getWorldPosition(new THREE.Vector3()).sub(c).normalize();
+    let best = null, bs = -Infinity;
+    for (const dir of ['right', 'up', 'left', 'down']) {
+      const s = n.clone().applyAxisAngle(this._rollAxis(dir), Math.PI / 2).normalize().dot(eye);
+      if (s > bs + 1e-6) { bs = s; best = dir; }
+    }
+    return best;
+  }
+
+  async roll(dir) {
+    if (this.rolling || !this.pivot) return;
+    this.rolling = true;
+    const axis = this._rollAxis(dir);
     const q0 = this.pivot.quaternion.clone();
     const q1 = new THREE.Quaternion().setFromAxisAngle(axis, Math.PI / 2).multiply(q0);
     const hy = this._halfHeight(q1);
