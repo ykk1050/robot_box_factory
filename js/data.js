@@ -42,7 +42,7 @@ export function dayConfig(n) {
 }
 
 export const UPGRADES = [
-  { id: 'die', name: '금형 보관함', icon: '🗂', price: 5000, desc: '성공한 전개도를 크기별로 저장해요. 같은 크기 주문은 버튼 하나로 재단!' },
+  { id: 'die', name: '금형 보관함', icon: '🗂', price: 5000, desc: '성공한 전개도를 크기별로 저장해요. 같은 크기 주문은 버튼 하나로 재단! (같은 전개도라 콤보는 끊겨요)' },
   { id: 'shoes', name: '쌩쌩 운동화', icon: '👟', price: 3000, desc: '공장 안을 1.6배 빠르게 걸어요.' },
   { id: 'truck', name: '큰 트럭', icon: '🚛', price: 4000, desc: '트럭이 30초 늦게 떠나요.' },
   { id: 'fast', name: '고속 접기 기계', icon: '⚙️', price: 3000, desc: '전개도를 두 배 빠르게 접어요.' },

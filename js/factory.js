@@ -302,6 +302,7 @@ export class Factory {
       const tap = !down.drag;
       down = null;
       if (tap && this.onTap) this.onTap(this.pick(e.clientX, e.clientY));
+      else if (!tap && this.allowRotate && this.onDrag) this.onDrag();
     }, sig);
     el.addEventListener('pointercancel', () => { down = null; }, sig);
   }

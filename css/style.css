@@ -233,3 +233,36 @@ button { font: inherit; color: inherit; }
   .timer { order: 5; flex-basis: 100%; }
   .leftcol { top: 108px; }
 }
+
+/* 조작 연습: 하이라이트와 안내 줄 */
+.tut-glow { outline: 4px solid var(--yellow) !important; outline-offset: 3px; animation: tutGlow 1.1s ease-in-out infinite; position: relative; z-index: 8; }
+@keyframes tutGlow { 50% { outline-color: var(--orange); box-shadow: 0 0 0 8px #ffcf4a55; } }
+.coach { flex: 1; display: flex; align-items: center; gap: 8px; background: #fff7d6; border: 2px solid var(--yellow); border-radius: 14px; padding: 4px 10px; min-height: 40px; font-size: 16px; line-height: 1.3; }
+.coach .cstep { font-family: "Jua", sans-serif; background: var(--orange); color: #fff; border-radius: 99px; padding: 2px 8px; font-size: 14px; flex: none; }
+.coach .ctext { flex: 1; font-family: "Jua", sans-serif; }
+.coach .btn { flex: none; }
+
+/* 전개도 콤보 */
+.pill.combo { cursor: pointer; font-family: "Jua", sans-serif; }
+.pill.combo.hot { background: #fff1d6; border-color: var(--orange); color: #b55e1f; }
+.combobox { background: #fff7ea; border: 2px solid #f2c48d; border-radius: 12px; padding: 8px 10px; font-size: 14px; }
+.combobox b { font-family: "Jua", sans-serif; font-weight: 400; font-size: 17px; color: #b55e1f; }
+.combobox p { margin: 3px 0 0; line-height: 1.45; }
+
+/* 전개도 유형 11가지 */
+.netguide { max-width: 720px; }
+.netguide .say { font-size: 15px; }
+.ngroup { margin: 10px 0; }
+.ngroup > b { font-family: "Jua", sans-serif; font-weight: 400; font-size: 18px; }
+.ngrid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.ncell { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; background: #fff; border: 2px solid var(--line); border-radius: 10px; padding: 6px; min-width: 88px; }
+.ncell.made { border-color: var(--green); }
+.ncell.chain { border-color: var(--orange); background: #fff7ea; }
+.ncell small { font-family: "Jua", sans-serif; font-size: 14px; }
+
+@media (max-width: 900px) {
+  .coach { font-size: 13px; }
+  .hud { flex-wrap: wrap; }
+  .play .coach { order: 5; flex-basis: 100%; }
+  .play.tut .leftcol { top: 112px; }
+}
