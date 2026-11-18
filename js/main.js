@@ -2,15 +2,29 @@
 import { ITEMS, CUSTOMERS, COST, BAG, dayConfig, UPGRADES, payFor } from './data.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.021';
+export const VERSION = window.BUILD || 'v1.022';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
-const loadWork = () => Promise.all([import('./factory.js'), import('./net.js'), import('./cutter.js'), import('./nettype.js')]).then(([f, n, c, t]) => {
-  analyzeNet = n.analyzeNet; Cutter = c.Cutter; boxPicture = c.boxPicture; sketchPicture = c.sketchPicture; STATIONS = f.STATIONS;
-  classifyNet = t.classifyNet; NET_TYPES = t.NET_TYPES; NET_GROUPS = t.NET_GROUPS; netTypePicture = t.netTypePicture;
-  return f.Factory;
-});
+// 학교 와이파이에서 파일 하나가 잠깐 끊겨도 멈추지 않게, 실패하면 잠깐 쉬었다가 3번까지 다시 받는다
+let workPromise = null;
+const loadWork = () => {
+  if (workPromise) return workPromise;
+  workPromise = (async () => {
+    for (let i = 0; ; i++) {
+      try {
+        const [f, n, c, t] = await Promise.all([import('./factory.js'), import('./net.js'), import('./cutter.js'), import('./nettype.js')]);
+        analyzeNet = n.analyzeNet; Cutter = c.Cutter; boxPicture = c.boxPicture; sketchPicture = c.sketchPicture; STATIONS = f.STATIONS;
+        classifyNet = t.classifyNet; NET_TYPES = t.NET_TYPES; NET_GROUPS = t.NET_GROUPS; netTypePicture = t.netTypePicture;
+        return f.Factory;
+      } catch (e) {
+        if (i >= 2) { workPromise = null; throw e; }
+        await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+      }
+    }
+  })();
+  return workPromise;
+};
 
 // 전개도 콤보: 앞 상자들과 겹치지 않는 유형으로 이어 만들수록 보너스가 커진다
 const COMBO_STEP = 300, COMBO_MAX = 1500;
