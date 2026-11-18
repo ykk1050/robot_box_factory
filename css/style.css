@@ -266,3 +266,8 @@ button { font: inherit; color: inherit; }
   .play .coach { order: 5; flex-basis: 100%; }
   .play.tut .leftcol { top: 112px; }
 }
+
+/* 가방·겨냥도 */
+.inv .bagline { font-family: "Jua", sans-serif; color: var(--teal-d); }
+.inv .bagline.full { color: var(--red); }
+.orderpin svg.sketch { background: #fffdf6; }

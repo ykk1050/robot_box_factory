@@ -26,6 +26,29 @@ export function boxPicture(dims, size = 150) {
   return svg;
 }
 
+// 겨냥도: 보이는 모서리는 실선, 보이지 않는 모서리 3개는 점선. 가로·세로·높이라는 말 없이 길이만 적는다.
+export function sketchPicture(dims, size = 150) {
+  const [w, hh, d] = dims;
+  const k = 0.55, a = (35 * Math.PI) / 180, dx = d * k * Math.cos(a), dy = d * k * Math.sin(a);
+  const fs = Math.max(w, hh, d) * 0.2;
+  const left = fs * 3.2, right = fs * 3.4, top = fs * 0.6, bottom = fs * 1.7;
+  const vbW = left + w + dx + right, vbH = top + dy + hh + bottom;
+  const svg = S('svg', { viewBox: `${-left} ${-dy - top} ${vbW} ${vbH}`, width: size, height: Math.round(size * vbH / vbW), class: 'sketch' });
+  const sw = Math.max(w, hh, d) * 0.03;
+  // 앞면 A(왼아래) B(오른아래) C(오른위) D(왼위), 뒤로 밀린 점은 '
+  const P = { A: [0, hh], B: [w, hh], C: [w, 0], D: [0, 0] };
+  for (const n of 'ABCD') P[n + "'"] = [P[n][0] + dx, P[n][1] - dy];
+  const line = (p, q, dash) => svg.append(S('line', { x1: P[p][0], y1: P[p][1], x2: P[q][0], y2: P[q][1], stroke: dash ? '#8a7a68' : '#3b2a1e', 'stroke-width': dash ? sw * 0.8 : sw, 'stroke-linecap': 'round', ...(dash ? { 'stroke-dasharray': `${sw * 3} ${sw * 2.5}` } : {}) }));
+  svg.append(S('polygon', { points: ['A', 'B', 'C', 'D'].map((n) => P[n].join(',')).join(' '), fill: '#fbf3e4' }));
+  [['A', "A'"], ["A'", "B'"], ["A'", "D'"]].forEach(([p, q]) => line(p, q, true));
+  [['A', 'B'], ['B', 'C'], ['C', 'D'], ['D', 'A'], ['D', "D'"], ['C', "C'"], ["D'", "C'"], ['B', "B'"], ["B'", "C'"]].forEach(([p, q]) => line(p, q, false));
+  const txt = (x, y, t, anchor = 'middle') => { const e = S('text', { x, y, 'font-size': fs, 'text-anchor': anchor, fill: '#3b2a1e', 'font-family': 'Jua, sans-serif' }); e.textContent = t; svg.append(e); };
+  txt(w / 2, hh + fs * 1.15, `${w}cm`);
+  txt(-fs * 0.35, hh / 2 + fs * 0.35, `${hh}cm`, 'end');
+  txt(w + dx / 2 + fs * 0.35, hh - dy / 2 + fs * 0.35, `${d}cm`, 'start');
+  return svg;
+}
+
 export class Cutter {
   constructor(host, { cols = 18, rows = 13, onCut, onChange } = {}) {
     this.cols = cols; this.rows = rows; this.rects = []; this.red = new Set();

@@ -16,7 +16,7 @@ export const STATIONS = {
   bench: { name: '작업대', icon: '🧰', stand: [0, 1.25], face: Math.PI },
   tape: { name: '테이프 출력기', icon: '🩹', pos: [-2.3, 0.45], stand: [-2.3, 1.3], face: Math.PI },
   sticker: { name: '스티커 제작기', icon: '🏷', pos: [-4.6, 2.4], rot: Math.PI / 2, stand: [-3.8, 2.4], face: -Math.PI / 2 },
-  guard: { name: '보호대 선반', icon: '🛡', pos: [-3.7, 0.45], stand: [-3.6, 1.3], face: Math.PI },
+  guard: { name: '포장재 선반', icon: '🛡', pos: [-3.7, 0.45], stand: [-3.6, 1.3], face: Math.PI },
 };
 
 function canvasTex(w, h, draw) {
@@ -50,6 +50,16 @@ const STICKER = {
     g.strokeStyle = '#d63b2f'; g.lineWidth = 8; g.strokeRect(6, 6, 116, 116);
     g.fillStyle = '#d63b2f'; g.font = 'bold 30px Jua, sans-serif'; g.textAlign = 'center';
     g.fillText('취급', 64, 56); g.fillText('주의', 64, 96);
+  }),
+  // 이쪽이 위: 위쪽 화살표 두 개
+  up: () => canvasTex(128, 128, (g) => {
+    g.fillStyle = '#fffdf2'; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = '#1b7a3e'; g.lineWidth = 6; g.strokeRect(4, 4, 120, 120);
+    g.fillStyle = '#1b7a3e';
+    [34, 94].forEach((x) => {
+      g.beginPath(); g.moveTo(x, 14); g.lineTo(x + 20, 44); g.lineTo(x + 8, 44); g.lineTo(x + 8, 84); g.lineTo(x - 8, 84); g.lineTo(x - 8, 44); g.lineTo(x - 20, 44); g.closePath(); g.fill();
+    });
+    g.font = 'bold 24px Jua, sans-serif'; g.textAlign = 'center'; g.fillText('이쪽이 위', 64, 114);
   }),
   stamp: () => canvasTex(128, 128, (g) => {
     g.clearRect(0, 0, 128, 128);
@@ -594,7 +604,34 @@ export class Factory {
 
   // 지금 쓰는 도구에 맞는 것만 누를 수 있게
   setTool(tool) {
-    this.pickables = tool === 'tape' ? this.edgeHits : tool === 'guard' ? this.cornerHits : tool === 'base' || tool === 'side' ? this.faceHits : [];
+    this.pickables = tool === 'tape' ? this.edgeHits : tool === 'guard' ? this.cornerHits : ['base', 'side', 'foil', 'up'].includes(tool) ? this.faceHits : [];
+  }
+
+  // 보냉 은박: 면 전체를 덮는다(밑면 도장은 그 위에 보이게 더 바깥에 있다)
+  addFoil(f) {
+    const tex = canvasTex(64, 64, (g) => {
+      g.fillStyle = '#cfd6de'; g.fillRect(0, 0, 64, 64);
+      g.strokeStyle = '#eef3f8'; g.lineWidth = 3;
+      for (let k = -64; k < 64; k += 12) { g.beginPath(); g.moveTo(k, 64); g.lineTo(k + 64, 0); g.stroke(); }
+    });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide }));
+    this._orientOnFace(m, f, 0.02);
+    m.scale.set(f.size[0] * 0.97, f.size[1] * 0.97, 1);
+    this.rig.group.add(m);
+    return m;
+  }
+
+  // 이쪽이 위 화살표: 옆면의 위쪽(밑면 반대쪽)을 가리키도록, 취급주의 스티커와 겹치지 않게 위 모서리 쪽에 작게
+  addUpArrow(f) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshLambertMaterial({ map: STICKER.up() }));
+    this._orientOnFace(m, f, 0.1);
+    const s = Math.min(f.size[0], f.size[1]) * 0.42;
+    m.scale.set(s, s, 1);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(m.quaternion);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(m.quaternion);
+    m.position.addScaledVector(up, f.size[1] / 2 - s / 2 - 0.05).addScaledVector(right, f.size[0] / 2 - s / 2 - 0.05);
+    this.rig.group.add(m);
+    return m;
   }
 
   // 면 위에 판을 놓는다. upWorld를 주면 지금 화면에서 바로 읽히는 방향으로 놓는다.
