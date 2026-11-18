@@ -2,7 +2,7 @@
 import { ITEMS, CUSTOMERS, COST, BAG, dayConfig, UPGRADES, payFor } from './data.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.020';
+export const VERSION = window.BUILD || 'v1.021';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -83,7 +83,7 @@ function showTitle() {
     h('div', { class: 'title-box' },
       h('p', { class: 'kicker' }, '5학년 2학기 · 5. 직육면체'),
       h('h1', {}, '로봇 상자 공장'),
-      h('p', { class: 'lead' }, '택배 주문이 밀려들어요! 골판지로 상자를 만들어', h('br'), '물건을 담고 트럭이 떠나기 전에 출고해요.'),
+      h('p', { class: 'lead' }, '택배 주문이 밀려들어요! 골판지로 상자를 만들어 ', h('br'), '물건을 담고 트럭이 떠나기 전에 출고해요.'),
       h('img', { class: 'hero', src: 'img/robot.webp', alt: '공장 로봇 팔 박스봇' }),
       h('p', { class: 'muted', style: 'margin:0 0 4px' }, '내 캐릭터'),
       charBtns,

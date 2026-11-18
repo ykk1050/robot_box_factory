@@ -24,6 +24,7 @@ body {
   font-family: "Gowun Dodum", "Malgun Gothic", sans-serif;
   overflow: hidden;
   user-select: none; -webkit-user-select: none;
+  word-break: keep-all; /* 한국어 낱말이 중간에서 끊기지 않게 */
 }
 #app { height: 100dvh; display: flex; flex-direction: column; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 h1, h2, h3, .btn, .kicker, .pill, .ticket b, .chip, .tool, .big-num, .big-stars, .ctitle, .steps { font-family: "Jua", sans-serif; font-weight: 400; }
@@ -229,6 +230,7 @@ button { font: inherit; color: inherit; }
   .bubble { font-size: 14px; }
 }
 @media (max-width: 520px) {
+  .lead br { display: none; }
   .hud { flex-wrap: wrap; }
   .timer { order: 5; flex-basis: 100%; }
   .leftcol { top: 108px; }
@@ -243,7 +245,7 @@ button { font: inherit; color: inherit; }
 .coach .btn { flex: none; }
 
 /* 전개도 콤보 */
-.pill.combo { cursor: pointer; font-family: "Jua", sans-serif; }
+.pill.combo { cursor: pointer; font-family: "Jua", sans-serif; min-height: 44px; min-width: 44px; } /* 누르는 버튼이라 손가락 크기 이상 */
 .pill.combo.hot { background: #fff1d6; border-color: var(--orange); color: #b55e1f; }
 .combobox { background: #fff7ea; border: 2px solid #f2c48d; border-radius: 12px; padding: 8px 10px; font-size: 14px; }
 .combobox b { font-family: "Jua", sans-serif; font-weight: 400; font-size: 17px; color: #b55e1f; }
