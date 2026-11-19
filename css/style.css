@@ -308,3 +308,17 @@ button { font: inherit; color: inherit; }
 
 .hint.bad { color: var(--red); }
 .hint.good { color: var(--green); font-family: "Jua", sans-serif; font-size: 18px; }
+
+/* 조합형 닉네임 만들기 */
+.nick-card { max-width: 720px; }
+.nick-preview { font-family: "Jua", sans-serif; font-size: 22px; text-align: center; background: #fff7e0; border: 2px dashed var(--card-d); border-radius: 12px; padding: 10px; margin: 6px 0; min-height: 30px; }
+.nick-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0; }
+.nick-step { border: 2px solid var(--line); background: #fff; border-radius: 12px; min-height: 56px; font-family: "Jua", sans-serif; font-size: 16px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px; }
+.nick-step small { font-family: "Gowun Dodum", sans-serif; font-size: 12px; color: var(--muted); }
+.nick-step.done { border-color: var(--green); }
+.nick-step.now { border-color: var(--teal); background: #e3f4ef; }
+.nick-grid { display: flex; flex-wrap: wrap; gap: 6px; max-height: 240px; overflow-y: auto; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: #fffdf8; }
+.nword { min-height: 44px; padding: 6px 12px; border-radius: 99px; border: 2px solid var(--line); background: #fff; font-family: "Jua", sans-serif; font-size: 16px; cursor: pointer; }
+.nword.sel { border-color: var(--teal); background: var(--teal); color: #fff; }
+.nick-mine { gap: 6px; margin: 4px 0; }
+@media (max-width: 520px) { .nick-steps { grid-template-columns: repeat(2, 1fr); } .nick-grid { max-height: 34dvh; } }

@@ -26,8 +26,15 @@ cost = re.search(r"export const COST = (\{[^}]*\});", data).group(1)
 
 block = ("var ITEMS = {\n" + "\n".join(items) + "\n};\nvar DAYS = [\n" + "\n".join(days) + "\n];\nvar COST = " + cost + ";")
 new = re.sub(r"var ITEMS = \{.*?\nvar COST = \{[^}]*\};", lambda _: block, gs, flags=re.S)
+# 닉네임 단어 (js/nickwords.js)
+import json
+nw = (root / 'js' / 'nickwords.js').read_text(encoding='utf-8')
+words = {k: re.findall(r"'([^']*)'", body) for k, body in re.findall(r"^\s*(color|like|mood|who): \[(.*?)\]", nw, re.S | re.M)}
+assert set(words) == {'color', 'like', 'mood', 'who'}, words.keys()
+nick_block = 'var NICK_WORDS = ' + json.dumps(words, ensure_ascii=False) + ';'
+new = re.sub(r"var NICK_WORDS = \{.*?\};", lambda _: nick_block, new, count=1, flags=re.S)
 if new != gs:
     gs_path.write_text(new, encoding='utf-8')
-    print(f'Code.gs를 고쳤어요 (물건 {len(items)}개, 근무일 {len(days)}일). Apps Script에 다시 붙여 넣어 주세요.')
+    print(f'Code.gs를 고쳤어요 (물건 {len(items)}개, 근무일 {len(days)}일, 닉네임 단어 {sum(map(len, words.values()))}개). Apps Script에 다시 붙여 넣어 주세요.')
 else:
     print(f'Code.gs가 이미 data.js와 같아요 (물건 {len(items)}개, 근무일 {len(days)}일).')

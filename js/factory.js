@@ -232,6 +232,14 @@ export class Factory {
   // 공장 꾸미기: 포스터, 전구 줄 (화분은 모델이라 _loadModels에서)
   _buildDecor() {
     const d = this.decor;
+    // 기사가 오가는 기계들 바로 뒤의 칸막이 벽 (카메라에 늘 보이는 곳). 벽 꾸미기는 여기에 단다
+    const wallCol = { 'wall-mint': 0xbfe3d0, 'wall-peach': 0xf3c9b4 }[d.wall] || 0xdccfb8;
+    const part = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.3, 0.1), new THREE.MeshLambertMaterial({ color: wallCol }));
+    part.position.set(-3.05, 1.15, -0.2);
+    this.scene.add(part);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(4.25, 0.08, 0.14), new THREE.MeshLambertMaterial({ color: 0x23706c }));
+    trim.position.set(-3.05, 2.3, -0.2);
+    this.scene.add(trim);
     if (d.poster && this.netTypes.length) {
       const tex = canvasTex(512, 320, (g) => {
         g.fillStyle = '#fffaf1'; g.fillRect(0, 0, 512, 320);
@@ -244,17 +252,17 @@ export class Factory {
           g.fillStyle = '#3b2a1e'; g.font = '20px Jua, sans-serif'; g.fillText(t.mark, ox + 28, oy + 86);
         });
       });
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.5), new THREE.MeshBasicMaterial({ map: tex }));
-      m.position.set(4.3, 2.5, -3.97);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.81), new THREE.MeshBasicMaterial({ map: tex }));
+      m.position.set(-1.72, 1.55, -0.14); // 칸막이 벽 오른쪽 끝, 작업대 바로 옆
       this.scene.add(m);
     }
     if (d.lights) {
       const cols = [0xff6b6b, 0xffd93d, 0x6bcb77, 0x4d96ff, 0xc77dff];
       this.bulbs = [];
-      for (let i = 0; i < 28; i++) {
-        const x = -4.8 + i * 0.4, y = 3.0 + Math.sin(i * 0.9) * 0.08;
+      for (let i = 0; i < 27; i++) {
+        const x = -5.0 + i * 0.15, y = 2.2 - Math.abs(Math.sin(i * 0.45)) * 0.12;
         const b = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial({ color: cols[i % cols.length] }));
-        b.position.set(x, y, -3.9);
+        b.position.set(x, y, -0.12);
         this.scene.add(b); this.bulbs.push(b);
       }
     }
@@ -281,7 +289,8 @@ export class Factory {
     put('rooted-gantry-arm-f35c8f', -1.6, 0, -2.4, 0.5);
     put('timber-eur-pallet-a1f655', 2.0, 0, -2.6);
     put('material-pallet-6af263', 3.5, 0, -2.7, 0.3);
-    if (this.decor.plants) { put('floor-houseplant-8fad17', -4.6, 0, 3.6); put('potted-shrub-43bd21', 3.9, 0, 3.5); }
+    // 화분: 작업대 옆과 스티커 제작기 옆 (늘 지나다니는 곳)
+    if (this.decor.plants) { put('floor-houseplant-8fad17', 1.35, 0, 0.82); put('potted-shrub-43bd21', -4.65, 0, 3.55); }
   }
 
   // ---------- 일꾼 ----------
@@ -385,6 +394,7 @@ export class Factory {
     const narrow = this.camera.aspect < 1 ? 1.5 : 1;
     this.follow = false;
     if (name === 'follow') { this.follow = true; Object.assign(g, { yaw: -0.12, pitch: 0.82, dist: 7.2 * narrow }); g.target = this.playerPos().clone().add(new THREE.Vector3(0, 0.8, -0.6)); }
+    else if (name === 'tour') Object.assign(g, { target: new THREE.Vector3(-0.6, 1.0, 0.6), yaw: -0.05, pitch: 0.42, dist: 9.5 * narrow });
     else if (name === 'table') Object.assign(g, { target: new THREE.Vector3(0, TABLE_Y + 0.15, 0), yaw: -0.15, pitch: 0.75, dist: 2.1 * narrow });
     else if (name === 'work') Object.assign(g, { target: new THREE.Vector3(0, TABLE_Y + box / 2, 0), yaw: -0.55, pitch: 0.5, dist: (box * 2.6 + 0.6) * narrow });
     else if (name === 'pack') Object.assign(g, { target: new THREE.Vector3(0, TABLE_Y + box / 2, 0), yaw: -0.35, pitch: 0.85, dist: (box * 2.6 + 0.9) * narrow });

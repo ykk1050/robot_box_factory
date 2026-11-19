@@ -11,12 +11,12 @@
   <link rel="icon" href="data:,">
   <script>
     // 게임 버전: 고칠 때마다 여기 하나만 +0.001 (화면 아래 제작자 줄에도 이 값이 나온다)
-    window.BUILD = 'v1.028';
+    window.BUILD = 'v1.029';
     // 모든 파일 주소에 버전을 붙여, 패드에 예전 파일이 남아 있어도 새 버전 파일을 함께 받게 한다
     (function () {
       var q = '?v=' + window.BUILD;
       var map = { imports: { three: './vendor/three.module.js', 'three/addons/': './vendor/addons/' } };
-      ['main', 'data', 'rank', 'net', 'nettype', 'cutter', 'factory', 'three-view'].forEach(function (f) {
+      ['main', 'data', 'rank', 'nickwords', 'net', 'nettype', 'cutter', 'factory', 'three-view'].forEach(function (f) {
         map.imports[new URL('js/' + f + '.js', location.href).href] = './js/' + f + '.js' + q;
       });
       var im = document.createElement('script');

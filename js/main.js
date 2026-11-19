@@ -1,9 +1,10 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
 import { ITEMS, CUSTOMERS, COST, BAG, EVENTS, OUTFITS, DECOR, dayConfig, UPGRADES, payFor } from './data.js';
 import { RANK_URL, RANK_ALL, TEST, rankOn, CATS, call } from './rank.js';
+import { NICK, NICK_WORDS, NICK_STEPS } from './nickwords.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.028';
+export const VERSION = window.BUILD || 'v1.029';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, netBoundary, netLines, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -36,7 +37,8 @@ const SAVE_KEY = 'robot-box-factory-v2';
 let save = { day: 1, money: 0, up: {}, dies: {}, best: {}, sound: true, char: 'm', nets: {}, tutorialDone: false, owned: {}, decor: {} };
 try { save = { ...save, ...JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') }; } catch (_) { /* 무시 */ }
 if (save.up.helper) { delete save.up.helper; save.money += 6000; } // 없어진 업그레이드는 돈으로 돌려준다
-if (save.rank && save.rank.cls !== '전체') delete save.rank; // 반별 랭킹을 없애서, 예전 이름표는 다시 참가해야 한다
+// 랭킹 이름은 조합형 닉네임(단어 번호)만 쓴다. 예전 반 코드·직접 쓴 별명 이름표는 지우고 다시 만들게 한다
+if (save.rank && !NICK.parse(save.rank.nick)) delete save.rank;
 function store() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (_) { /* 무시 */ } }
 
 // ---------- 소리 ----------
@@ -117,31 +119,71 @@ function showTitle() {
 
 // ---------- 상점 ----------
 // ---------- 반 랭킹 ----------
+// 기기 열쇠: 닉네임 주인 확인용. 기기마다 한 번 만들어 계속 쓴다(개인정보 아님, 서버는 해시만 보관)
+function deviceKey() {
+  let k = save.devKey;
+  if (!/^[0-9a-f]{32}$/.test(k || '')) {
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    k = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+    save.devKey = k; store();
+  }
+  return k;
+}
+const rankQ = () => ({ cls: RANK_ALL, nick: save.rank.nick, key: deviceKey() });
+const nickName = (id) => { const ix = NICK.parse(id); return ix ? NICK.text(ix) : ''; };
+
+// 닉네임 만들기: 단어 4개(색 → 좋아하는 것 → 모습 → 캐릭터)를 골라 조합한다. 글자를 직접 쓰는 칸은 없다.
 function profileDialog(after) {
-  const r = save.rank || {};
-  const nick = h('input', { class: 'tin', value: r.nick || '', maxlength: 10, placeholder: '예: 상자왕' });
-  const pin = h('input', { class: 'tin', value: r.pin || '', maxlength: 4, inputmode: 'numeric', pattern: '[0-9]*', placeholder: '숫자 4자리' });
-  const msg = h('p', { class: 'hint' }, '실제 이름 대신 별명을 써요. 비밀번호는 다른 친구가 내 별명으로 점수를 올리지 못하게 막아 줘요.');
-  const ov = h('div', { class: 'overlay' }, h('div', { class: 'card' },
-    h('h2', {}, '🏆 랭킹 참가하기'),
-    h('label', { class: 'field' }, '별명 (2~10글자)', nick),
-    h('label', { class: 'field' }, '비밀번호', pin),
-    msg,
-    h('div', { class: 'row end' },
+  const pick = (save.rank && NICK.parse(save.rank.nick)) || [null, null, null, null];
+  let step = Math.max(0, pick.findIndex((v) => v == null));
+  const preview = h('p', { class: 'nick-preview' });
+  const tabs = h('div', { class: 'nick-steps' });
+  const grid = h('div', { class: 'nick-grid' });
+  const msg = h('p', { class: 'hint' }, '실제 이름 대신 단어를 골라 닉네임을 만들어요. 이 기기에서 만든 닉네임은 다음에도 다시 고를 수 있어요.');
+  const saveBtn = h('button', { class: 'btn' }, '이 닉네임으로 정하기');
+  const mine = (save.myNicks || []).filter((id) => NICK.parse(id));
+  const draw = () => {
+    const full = pick.every((v) => v != null);
+    preview.textContent = full ? NICK.text(pick) : pick.map((v, k) => (v == null ? '?' : NICK_WORDS[NICK_STEPS[k].key][v])).join(' ');
+    saveBtn.disabled = !full;
+    tabs.innerHTML = '';
+    NICK_STEPS.forEach((st, k) => tabs.append(h('button', { class: 'nick-step' + (k === step ? ' now' : '') + (pick[k] != null ? ' done' : ''), onclick: () => { sfx('click'); step = k; draw(); } },
+      h('small', {}, `${k + 1}. ${st.label}`), pick[k] == null ? '?' : NICK_WORDS[st.key][pick[k]])));
+    grid.innerHTML = '';
+    NICK_WORDS[NICK_STEPS[step].key].forEach((w, i) => grid.append(h('button', { class: 'nword' + (pick[step] === i ? ' sel' : ''), onclick: () => {
+      sfx('click'); pick[step] = i;
+      const next = pick.findIndex((v) => v == null);
+      if (next >= 0) step = next;
+      draw();
+    } }, w)));
+    grid.scrollTop = 0;
+  };
+  saveBtn.addEventListener('click', async () => {
+    if (!pick.every((v) => v != null)) return;
+    const id = NICK.id(pick);
+    saveBtn.disabled = true;
+    msg.textContent = '확인하는 중…';
+    const res = await call({ act: 'join', cls: RANK_ALL, nick: id, key: deviceKey() });
+    saveBtn.disabled = false;
+    msg.textContent = res.msg || '';
+    if (!res.ok) { sfx('no'); return; }
+    save.rank = { nick: id };
+    save.myNicks = [id, ...(save.myNicks || []).filter((x) => x !== id)].slice(0, 10);
+    store(); sfx('ok');
+    setTimeout(() => { ov.remove(); if (after) after(); }, 700);
+  });
+  const ov = h('div', { class: 'overlay' }, h('div', { class: 'card nick-card' },
+    h('h2', {}, '🏆 닉네임 만들기'),
+    preview,
+    mine.length ? h('div', { class: 'row wrap nick-mine' }, h('small', {}, '내 닉네임:'), ...mine.map((id) => h('button', { class: 'chip small', onclick: () => { sfx('click'); NICK.parse(id).forEach((v, k) => { pick[k] = v; }); draw(); } }, nickName(id)))) : null,
+    tabs, grid,
+    h('div', { class: 'row wrap end' },
+      h('button', { class: 'btn ghost', onclick: () => { sfx('click'); NICK_STEPS.forEach((st, k) => { pick[k] = Math.floor(Math.random() * NICK_WORDS[st.key].length); }); draw(); } }, '🎲 아무거나'),
       h('button', { class: 'btn ghost', onclick: () => { sfx('click'); ov.remove(); } }, '닫기'),
-      h('button', { class: 'btn', onclick: async (e) => {
-        const q = { cls: RANK_ALL, nick: nick.value.trim(), pin: pin.value.trim() };
-        if (q.nick.length < 2 || !/^\d{4}$/.test(q.pin)) { msg.textContent = '별명(2글자 이상)과 숫자 4자리 비밀번호를 넣어요.'; return; }
-        const btn = e.currentTarget; // 기다린 뒤에는 e.currentTarget이 비므로 미리 잡아 둔다
-        btn.disabled = true;
-        msg.textContent = '확인하는 중…';
-        const res = await call({ act: 'join', ...q });
-        btn.disabled = false;
-        msg.textContent = res.msg || '';
-        if (!res.ok) return;
-        save.rank = q; store(); sfx('ok');
-        setTimeout(() => { ov.remove(); if (after) after(); }, 700);
-      } }, '참가하기'))));
+      saveBtn),
+    msg));
+  draw();
   app.append(ov);
 }
 
@@ -152,23 +194,22 @@ async function showRanking(cat = 'day', day = save.day > 1 ? save.day - 1 : 1) {
   const days = cat !== 'day' ? null : h('div', { class: 'row center wrap' },
     ...Array.from({ length: Math.max(save.day, 6) }, (_, i) => i + 1).map((d) => h('button', { class: 'chip small' + (d === day ? ' now' : ''), onclick: () => { sfx('click'); showRanking('day', d); } }, `${d}일차`)));
   const me = save.rank;
-  const prof = h('p', { class: 'center' }, me ? `내 별명: ${me.nick} ` : '아직 랭킹에 참가하지 않았어요. ',
-    h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); profileDialog(() => showRanking(cat, day)); } }, me ? '바꾸기' : '참가하기'));
+  const prof = h('p', { class: 'center' }, me ? `내 닉네임: ${nickName(me.nick)} ` : '닉네임을 만들면 랭킹에 올라가요. ',
+    h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); profileDialog(() => showRanking(cat, day)); } }, me ? '바꾸기' : '닉네임 만들기'));
   app.append(h('div', { class: 'screen shop-screen' },
     h('div', { class: 'topline' }, h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showTitle(); } }, '← 돌아가기'), h('h2', {}, '🏆 전체 랭킹'), h('span')),
     RANK_URL ? null : h('p', { class: 'center hint' }, '선생님이 랭킹을 아직 연결하지 않았어요.'),
     prof, tabs, days, list, creditLine()));
   if (!RANK_URL) return;
-  if (!me) { list.append(h('p', { class: 'center muted' }, '참가하면 순위를 볼 수 있어요.')); return; }
   list.append(h('p', { class: 'center muted' }, '불러오는 중…'));
-  const res = await call({ act: 'top', cls: me.cls, nick: me.nick, cat, day });
+  const res = await call({ act: 'top', cls: RANK_ALL, nick: me ? me.nick : '', cat, day });
   if (!list.isConnected) return;
   list.innerHTML = '';
   if (!res.ok) { list.append(h('p', { class: 'center' }, res.msg || '불러오지 못했어요.')); return; }
   const c = CATS.find((x) => x.id === cat);
   if (!res.rows.length) list.append(h('p', { class: 'center muted' }, '아직 기록이 없어요. 첫 번째 주인공이 되어 봐요!'));
-  res.rows.forEach((r) => list.append(h('div', { class: 'rankrow' + (r.nick === me.nick ? ' me' : '') },
-    h('span', { class: 'rk' }, r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : `${r.rank}`), h('span', { class: 'rn' }, r.nick), h('span', { class: 'rv' }, c.unit(r.v)))));
+  res.rows.forEach((r) => list.append(h('div', { class: 'rankrow' + (me && r.nick === me.nick ? ' me' : '') },
+    h('span', { class: 'rk' }, r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : `${r.rank}`), h('span', { class: 'rn' }, r.name || nickName(r.nick) || r.nick), h('span', { class: 'rv' }, c.unit(r.v)))));
   if (res.myRank > 30) list.append(h('p', { class: 'center' }, `내 순위: ${res.myRank}위`));
 }
 
@@ -197,7 +238,7 @@ function showShop(after, tab = 'up') {
         if (isOne(d.slot)) save.decor[d.slot] = on ? null : d.id; else save.decor[d.slot] = !on;
         store(); draw();
       } }, on ? '꾸밈 중 ✔' : '꾸미기');
-      list.append(item(d.icon, d.name, isOne(d.slot) ? '바닥·벽은 하나만 고를 수 있어요. 다시 누르면 기본으로 돌아가요.' : '',
+      list.append(item(d.icon, d.name, isOne(d.slot) ? '바닥·벽은 하나만 고를 수 있어요. 다시 누르면 기본으로 돌아가요. 벽 색은 기계 뒤 칸막이에 칠해져요.' : '',
         owned ? toggle : priceBtn(d.price, () => { save.owned[d.id] = true; save.decor[d.slot] = isOne(d.slot) ? d.id : true; }), on));
     });
     if (tab === 'outfit') OUTFITS.forEach((o) => {
@@ -306,7 +347,9 @@ async function playDay(n, opts = {}) {
   if (tutorial) root.classList.add('tut');
   app.append(root);
   const F = new Factory(gl, { character: (OUTFITS.find((o) => o.id === save.char) || OUTFITS[0]).model, walkSpeed: save.up.shoes ? 3.5 : 2.2, decor: save.decor || {}, netTypes: NET_TYPES });
-  F.view('follow');
+  // 근무 시작: 공장 전체를 잠깐 비춘 뒤 기사에게 다가간다 (꾸민 공장도 한눈에)
+  F.view('tour');
+  setTimeout(() => { if (F.alive && F.mode === 'walk' && !F.follow) F.view('follow'); }, 2400);
 
   // 상태
   let timeLeft = cfg.time + (save.up.truck ? 30 : 0);
@@ -332,7 +375,7 @@ async function playDay(n, opts = {}) {
   // 랭킹: 근무표를 받고, 출고할 때마다 기록을 남긴다(서버가 이 기록으로 점수를 다시 계산한다)
   const shipLog = [];
   let rankToken = null, rankStartMsg = '';
-  if (!tutorial && rankOn() && save.rank) call({ act: 'start', ...save.rank, day: n }).then((r) => { if (r.ok) rankToken = r.token; else rankStartMsg = r.msg; });
+  if (!tutorial && rankOn() && save.rank) call({ act: 'start', ...rankQ(), day: n }).then((r) => { if (r.ok) rankToken = r.token; else rankStartMsg = r.msg; });
 
   const say = (t, mood = 'talk') => { bubble.className = 'bubble ' + mood; bubble.textContent = t; bubble.classList.remove('pop'); void bubble.offsetWidth; bubble.classList.add('pop'); };
   const money = (v, why) => {
@@ -1334,10 +1377,10 @@ async function playDay(n, opts = {}) {
     store();
     sfx(pass ? 'clear' : 'no');
     // 랭킹에 올리기: 점수 대신 출고 기록을 보내고, 서버가 다시 계산해서 순위를 알려 준다
-    const rankLi = !tutorial && rankOn() ? h('li', { class: 'rankline' }, save.rank ? '🏆 랭킹에 올리는 중…' : '🏆 시작 화면의 🏆 랭킹에서 참가하면 랭킹에 올라가요.') : null;
+    const rankLi = !tutorial && rankOn() ? h('li', { class: 'rankline' }, save.rank ? '🏆 랭킹에 올리는 중…' : '🏆 시작 화면의 🏆 랭킹에서 닉네임을 만들면 랭킹에 올라가요.') : null;
     if (rankLi && save.rank) {
       if (!rankToken) rankLi.textContent = '🏆 ' + (rankStartMsg || '랭킹 서버와 연결이 안 돼서 이번 기록은 올라가지 않아요.');
-      else call({ act: 'submit', ...save.rank, day: n, token: rankToken, log: shipLog, earned }).then((r) => {
+      else call({ act: 'submit', ...rankQ(), day: n, token: rankToken, log: shipLog, earned }).then((r) => {
         rankLi.textContent = r.ok ? `🏆 ${n}일차 매출 전체 ${r.myRank}위! (완벽한 상자 ${r.perfect}개 · 최고 콤보 ${r.bestCombo})` : `🏆 ${r.msg}`;
       });
     }
