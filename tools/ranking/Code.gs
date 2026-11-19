@@ -44,7 +44,7 @@ var DAYS = [
   { items: ['icecream', 'milk', 'cake', 'pizza', 'plant', 'frame', 'mug'], time: 360, every: 52, target: 13000 },
   { items: ['umbrella', 'blocks', 'shoe', 'robot', 'book', 'game', 'milk', 'pizza'], time: 360, every: 50, target: 14000, sketch: 1 },
 ];
-var COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, staple: 40 };
+var COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, glue: 5 };
 var COMBO_STEP = 300, COMBO_MAX = 1500, SKETCH_PAY = 300, TRUCK_PLUS = 30, MAX_TIP = 0.3;
 var REGULAR_TIP = 500;      // 단골 손님: 실수 없이 보내면 팁 (js/data.js EVENTS.regular.tip)
 var MAX_EVENT_SHARE = 0.5; // 급한 주문·단골 손님은 많아야 상자의 절반쯤

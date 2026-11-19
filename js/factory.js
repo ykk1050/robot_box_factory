@@ -633,6 +633,7 @@ export class Factory {
         const gap = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, a.distanceTo(b) * 0.98, 6), new THREE.MeshBasicMaterial({ color: 0x3a2412 }));
         gap.position.copy(m.position); gap.quaternion.copy(m.quaternion);
         this.rig.group.add(gap);
+        e.gap = gap;
       }
       return m;
     });
@@ -745,28 +746,17 @@ export class Factory {
     return m;
   }
 
-  // 스테이플러 철심: 모서리를 가로질러 두 면에 걸친 은색 ㄷ자 심 3개
-  addStaple(e) {
+  // 본드: 접으면서 붙은 모서리는 벌어진 틈이 사라지고, 살짝 반짝이는 본드 자국만 남는다
+  addGlue(e) {
+    if (e.gap) e.gap.visible = false;
     const a = new THREE.Vector3(...e.a), b = new THREE.Vector3(...e.b);
-    const g = new THREE.Group();
-    const mat = new THREE.MeshLambertMaterial({ color: 0xc8ccd2 });
-    const ctr = [0, 1, 2].map((k) => (this.A.bbox.mn[k] + this.A.bbox.mx[k]) / 2);
-    const others = [0, 1, 2].filter((k) => k !== e.axis);
-    const len = Math.min(0.55, 0.22 * Math.min(...this.A.dims));
-    [0.2, 0.5, 0.8].forEach((f) => {
-      const c = new THREE.Vector3().lerpVectors(a, b, f).toArray();
-      const inward = c.map((v, k) => Math.sign(ctr[k] - v));
-      others.forEach((k) => {
-        const o = others.find((x) => x !== k);
-        const s = [0.07, 0.07, 0.07]; s[o] = len; s[k] = 0.04;
-        const m = new THREE.Mesh(new THREE.BoxGeometry(...s), mat);
-        const pos = [...c]; pos[o] += inward[o] * len / 2; pos[k] += -inward[k] * 0.03;
-        m.position.set(...pos);
-        g.add(m);
-      });
-    });
-    this.rig.group.add(g);
-    return g;
+    const len = a.distanceTo(b);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, len * 0.96, 8),
+      new THREE.MeshPhongMaterial({ color: 0xfff6d0, shininess: 120, specular: 0xffffff, transparent: true, opacity: 0.75 }));
+    m.position.copy(a).add(b).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+    this.rig.group.add(m);
+    return m;
   }
 
   // 택배 전용 테이프: 크림색 바탕에 공장 색(청록) 줄무늬. 골판지 갈색과 헷갈리지 않는다.

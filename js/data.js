@@ -28,8 +28,8 @@ export const ITEMS = {
 export const CUSTOMERS = ['🐰 토끼 문구점', '🐻 곰돌이 마트', '🦊 여우 서점', '🐱 고양이 카페', '🐼 판다 장난감 가게', '🐸 개구리 꽃집', '🦉 부엉이 도서관', '🐧 펭귄 빵집'];
 
 // 재료 값: 테이프 1cm, 스티커 1장, 보호대 1개
-// roll: 테이프 롤(총 길이로 뽑기) 1cm, staple: 스테이플러로 모서리 한 곳 찝기
-export const COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, staple: 40 };
+// roll: 테이프 롤(총 길이로 뽑기) 1cm, glue: 본드 1cm
+export const COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, glue: 5 };
 // 특별 손님: 급한 주문(기다리는 시간 절반, 돈 2배), 단골 손님(실수 없이 보내면 팁)
 export const EVENTS = { urgent: { chance: 0.15, from: 2 }, regular: { chance: 0.12, from: 1, tip: 500 } };
 

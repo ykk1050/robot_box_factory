@@ -3,7 +3,7 @@ import { ITEMS, CUSTOMERS, COST, BAG, EVENTS, OUTFITS, DECOR, dayConfig, UPGRADE
 import { RANK_URL, RANK_ALL, TEST, rankOn, CATS, call } from './rank.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.027';
+export const VERSION = window.BUILD || 'v1.028';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, netBoundary, netLines, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -809,10 +809,10 @@ async function playDay(n, opts = {}) {
       oops('빨간 면이 떨어져 있어요! 전개도의 면은 길이가 같은 모서리끼리 이어져 있어야 접을 수 있어요.');
       return;
     }
-    // 맞는 전개도면 접기 전에 스테이플러 단계(접었을 때 만나는 선분 잇기)를 거친다
+    // 맞는 전개도면 접기 전에 본드 칠하기(접었을 때 만나는 선분 잇기) 단계를 거친다
     let glued = [];
     if (A.valid && !A.problem && !tutorial) {
-      glued = await stapleStage(rects, A);
+      glued = await glueStage(rects, A);
       if (!active || over) return;
     }
     place = 'busy';
@@ -865,22 +865,22 @@ async function playDay(n, opts = {}) {
     await F.tumble(Math.floor(Math.random() * 5));
     if (!active || over) return;
     F.setupPacking();
-    // 스테이플러로 이어 둔 선분은 접으면서 철심이 박혀 붙은 모서리가 된다
+    // 본드를 칠해 둔 선분은 접으면서 딱 붙은 모서리가 된다
     if (glued.length) {
       const key = (p) => p.map((v) => Math.round(v * 1000) / 1000).join(',');
       let k = 0;
       glued.forEach((sg) => {
         const want = [key(sg.p3a), key(sg.p3b)].sort().join('|');
         const e = F.edges.find((x) => [key(x.a), key(x.b)].sort().join('|') === want);
-        if (e && !active.taped.has(e.id)) { active.taped.add(e.id); F.addStaple(e); k++; }
+        if (e && !active.taped.has(e.id)) { active.taped.add(e.id); F.addGlue(e); k++; }
       });
-      if (k) setTimeout(() => { if (active) say(`🔩 스테이플러로 이어 둔 모서리 ${k}개는 접으면서 철심이 콕! 나머지 모서리에 테이프를 붙여요.`, 'happy'); }, 1500);
+      if (k) setTimeout(() => { if (active) say(`🧴 본드를 칠해 둔 모서리 ${k}개는 접으면서 딱 붙었어요! 나머지 모서리에 테이프를 붙여요.`, 'happy'); }, 1500);
     }
     enterWork();
   }
 
-  // ---------- 스테이플러: 접었을 때 만나는 선분 잇기 (겹치는 점·선분) ----------
-  function stapleStage(rects, A) {
+  // ---------- 본드 칠하기: 접었을 때 만나는 선분 잇기 (겹치는 점·선분) ----------
+  function glueStage(rects, A) {
     return new Promise((resolve) => {
       const { points, segs } = netBoundary(rects, A);
       place = 'glue';
@@ -890,7 +890,7 @@ async function playDay(n, opts = {}) {
       let sel = null;
       cutWrap.innerHTML = '';
       cutWrap.append(h('div', { class: 'ctools' },
-        h('span', { class: 'ctitle' }, '🔩 스테이플러 · 접었을 때 만나는 두 선분을 차례로 눌러요 (안 해도 돼요)'),
+        h('span', { class: 'ctitle' }, '🧴 본드 칠하기 · 접었을 때 만나는 두 선분을 차례로 눌러요 (안 해도 돼요)'),
         h('button', { class: 'btn warn', onclick: () => { sfx('click'); resolve(glued); } }, '접기 ▶')));
       const host = h('div', { class: 'sheet-host' });
       cutWrap.append(host);
@@ -925,7 +925,7 @@ async function playDay(n, opts = {}) {
       };
       const nm = (sg) => `선분 ${sg.a.name}${sg.b.name}`;
       function onSeg(sg) {
-        if (color.has(sg.id)) { say(`${nm(sg)}은 벌써 스테이플러로 이어 두었어요.`); return; }
+        if (color.has(sg.id)) { say(`${nm(sg)}에는 벌써 본드를 칠했어요.`); return; }
         if (!sel) { sel = sg; sfx('click'); draw(); say(`${nm(sg)}을 골랐어요. 접었을 때 이 선분과 만나는 선분을 눌러요.`); return; }
         if (sel === sg) { sel = null; draw(); return; }
         const a = sel; sel = null;
@@ -933,20 +933,20 @@ async function playDay(n, opts = {}) {
           const c = COLORS[glued.length % COLORS.length];
           color.set(a.id, c); color.set(sg.id, c);
           glued.push(a);
-          money(-COST.staple, '철심');
+          money(-a.len * COST.glue, '본드');
           sfx('tape');
           // 겹치는 점도 알려 준다
           const pair = [a.a, a.b].map((p) => `점 ${p.name}은 점 ${[sg.a, sg.b].find((q) => q.k3 === p.k3).name}과`).join(', ');
-          say(`철컥! ${nm(a)}과 ${nm(sg)}이 접으면 만나요. ${pair} 겹쳐요.`, 'happy');
+          say(`쓱싹! ${nm(a)}과 ${nm(sg)}에 본드를 칠했어요. 접으면 두 선분이 만나요. ${pair} 겹쳐요.`, 'happy');
         } else {
           oops(`${nm(a)}과 ${nm(sg)}은 접으면 서로 다른 곳에 가요. 선분 끝의 두 점이 접었을 때 각각 어느 점과 겹칠지 생각해 봐요.`, 0);
         }
         draw();
       }
       draw();
-      setSide(h('p', { class: 'hint' }, '🔩 스테이플러로 이어 둔 선분은 접을 때 철심이 박혀서 테이프가 필요 없어요. 맞는 짝을 찾을수록 테이프 값과 시간을 아껴요.'),
-        h('p', { class: 'hint' }, `철심은 한 곳에 ${won(COST.staple)}이에요. 접었을 때 만나는 선분은 길이가 같아요.`), invView());
-      say('전개도를 접으면 어떤 선분끼리 만날까요? 만나는 두 선분을 스테이플러로 이어 봐요!');
+      setSide(h('p', { class: 'hint' }, '🧴 본드를 칠해 둔 두 선분은 접을 때 맞닿으면서 딱 붙어서 테이프가 필요 없어요. 맞는 짝을 찾을수록 테이프 값과 시간을 아껴요.'),
+        h('p', { class: 'hint' }, `본드는 1cm에 ${won(COST.glue)}이에요. 접었을 때 만나는 선분은 길이가 같아요.`), invView());
+      say('전개도를 접으면 어떤 선분끼리 만날까요? 만나는 두 선분에 본드를 칠해 봐요!');
     });
   }
 

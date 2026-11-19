@@ -25,17 +25,17 @@ async () => {
     if (!(await until(() => G.place === 'cut', 15000))) { result.막힘 = `${key}: 재단기가 열리지 않음`; return result; }
     G.cutter.set(netFor(o.item.d));
     G.doCut();
-    // 스테이플러 단계: 맞는 짝 2곳을 이어 본 뒤 접기
-    if (!(await until(() => G.place === 'glue', 15000))) { result.막힘 = `${key}: 스테이플러 단계가 나오지 않음`; return result; }
+    // 본드 칠하기 단계: 맞는 짝 2곳을 이어 본 뒤 접기
+    if (!(await until(() => G.place === 'glue', 15000))) { result.막힘 = `${key}: 본드 칠하기 단계가 나오지 않음`; return result; }
     const hits = [...document.querySelectorAll('.sheet-host svg line')].filter((l) => l.getAttribute('stroke') === 'transparent');
     const tap = (i) => hits[i] && hits[i].dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
     const { analyzeNet, netBoundary } = await import('/js/net.js?v=' + window.BUILD);
     const nb = netBoundary(G.cutter.rects, analyzeNet(G.cutter.rects));
-    const used = new Set(); let stapled = 0;
-    for (const sg of nb.segs) { if (stapled >= 2) break; if (sg.partner < 0 || used.has(sg.id)) continue; tap(sg.id); tap(sg.partner); used.add(sg.id); used.add(sg.partner); stapled++; }
+    const used = new Set(); let glued = 0;
+    for (const sg of nb.segs) { if (glued >= 2) break; if (sg.partner < 0 || used.has(sg.id)) continue; tap(sg.id); tap(sg.partner); used.add(sg.id); used.add(sg.partner); glued++; }
     [...document.querySelectorAll('.cutter button')].find((b) => b.textContent.includes('접기')).click();
     if (!(await until(() => G.place === 'work', 20000))) { result.막힘 = `${key}: 포장 단계로 가지 못함`; return result; }
-    if (G.active.taped.size < 2) { result.막힘 = `${key}: 스테이플러로 이은 모서리가 붙지 않음 (${G.active.taped.size})`; return result; }
+    if (G.active.taped.size < 2) { result.막힘 = `${key}: 본드로 이은 모서리가 붙지 않음 (${G.active.taped.size})`; return result; }
     // 재료를 넉넉히 손에 쥐여 주고 모두 붙인다
     G.F.edges.forEach((e) => { G.inv.tape[e.len] = (G.inv.tape[e.len] || 0) + 1; });
     Object.assign(G.inv, { guard: 8, base: 2, side: 4, foil: 6, up: 4 });
