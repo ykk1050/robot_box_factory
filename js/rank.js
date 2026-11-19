@@ -1,6 +1,6 @@
 // 반 랭킹: 선생님 구글 시트(Apps Script 웹 앱)와 주고받는다.
 // 연결 방법은 tools/ranking/연결방법.md. 웹 앱 주소를 아래 RANK_URL에 넣으면 랭킹이 켜진다.
-export const RANK_URL = '';
+export const RANK_URL = 'https://script.google.com/macros/s/AKfycbz2XqmcRuvearCO1u3CpAkBkCfcOUecudbxLuJUYVgBfXUFPZSZOhUCzwNVd7sdpszGyw/exec';
 
 // 점검 봇(?test=1)으로 돌릴 때는 랭킹에 올리지 않는다
 export const TEST = new URLSearchParams(location.search).has('test');
