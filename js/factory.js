@@ -69,7 +69,8 @@ const STICKER = {
 };
 
 export class Factory {
-  constructor(container, { character = 'm', walkSpeed = 2.2 } = {}) {
+  constructor(container, { character = 'construction-worker-c1ad8c', walkSpeed = 2.2, decor = {}, netTypes = [] } = {}) {
+    this.decor = decor; this.netTypes = netTypes;
     this.container = container;
     this.renderer = getRenderer();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
@@ -92,6 +93,7 @@ export class Factory {
     this.cam = { target: new THREE.Vector3(-1, 0.9, 2), yaw: -0.15, pitch: 0.8, dist: 7.5 };
     this.goal = { target: this.cam.target.clone(), yaw: this.cam.yaw, pitch: this.cam.pitch, dist: this.cam.dist };
     this._buildRoom();
+    this._buildDecor();
     this._buildStations();
     this._loadModels(character);
     this._bindPointer();
@@ -114,8 +116,15 @@ export class Factory {
   _buildRoom() {
     const s = this.scene;
     const floorTex = canvasTex(256, 256, (g) => {
-      g.fillStyle = '#a7adb3'; g.fillRect(0, 0, 256, 256);
-      g.strokeStyle = '#959ba1'; g.lineWidth = 3; g.strokeRect(0, 0, 256, 256);
+      const f = this.decor.floor;
+      if (f === 'floor-wood') {
+        g.fillStyle = '#c99b6b'; g.fillRect(0, 0, 256, 256);
+        g.fillStyle = '#b98a5c'; for (let y = 0; y < 256; y += 64) g.fillRect(0, y, 256, 4);
+        g.fillRect(120, 0, 4, 64); g.fillRect(40, 64, 4, 64); g.fillRect(180, 128, 4, 64); g.fillRect(90, 192, 4, 64);
+      } else {
+        g.fillStyle = f === 'floor-blue' ? '#a9cde3' : '#a7adb3'; g.fillRect(0, 0, 256, 256);
+        g.strokeStyle = f === 'floor-blue' ? '#8fb7d0' : '#959ba1'; g.lineWidth = 3; g.strokeRect(0, 0, 256, 256);
+      }
     });
     floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
     floorTex.repeat.set(12, 8);
@@ -132,7 +141,7 @@ export class Factory {
       l.rotation.x = -Math.PI / 2; l.position.set((x0 + x1) / 2, 0.005, z0);
       s.add(l);
     });
-    const wallMat = new THREE.MeshLambertMaterial({ color: 0xe9dcc6 });
+    const wallMat = new THREE.MeshLambertMaterial({ color: { 'wall-mint': 0xcfe9dc, 'wall-peach': 0xf6d5c3 }[this.decor.wall] || 0xe9dcc6 });
     const back = new THREE.Mesh(new THREE.PlaneGeometry(36, 7), wallMat);
     back.position.set(3, 3.5, -4);
     s.add(back);
@@ -204,7 +213,7 @@ export class Factory {
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.6), M(0xe07a2f)); body.position.y = 0.55; g.add(body);
       const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.3), new THREE.MeshBasicMaterial({ map: canvasTex(128, 76, (c) => { c.fillStyle = '#1f3b3a'; c.fillRect(0, 0, 128, 76); c.fillStyle = '#7ff0c8'; c.font = 'bold 26px Jua, sans-serif'; c.fillText('길이 cm', 12, 32); c.fillText('개수 ×', 12, 64); }) }));
       screen.position.set(0, 0.8, 0.301); g.add(screen);
-      const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.16, 20), M(0xc49a5c)); roll.rotation.x = Math.PI / 2; roll.position.set(0, 1.28, 0); g.add(roll);
+      const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.16, 20), M(0x2f8f8a)); roll.rotation.x = Math.PI / 2; roll.position.set(0, 1.28, 0); g.add(roll);
       const slot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.1), M(0x333333)); slot.position.set(0, 0.35, 0.3); g.add(slot);
     });
     add('sticker', (g) => {
@@ -220,6 +229,37 @@ export class Factory {
     });
   }
 
+  // 공장 꾸미기: 포스터, 전구 줄 (화분은 모델이라 _loadModels에서)
+  _buildDecor() {
+    const d = this.decor;
+    if (d.poster && this.netTypes.length) {
+      const tex = canvasTex(512, 320, (g) => {
+        g.fillStyle = '#fffaf1'; g.fillRect(0, 0, 512, 320);
+        g.strokeStyle = '#23706c'; g.lineWidth = 10; g.strokeRect(5, 5, 502, 310);
+        g.fillStyle = '#23706c'; g.font = 'bold 34px Jua, sans-serif'; g.textAlign = 'center'; g.fillText('정육면체의 전개도 11가지', 256, 48);
+        this.netTypes.forEach((t, i) => {
+          const ox = 24 + (i % 6) * 80, oy = 78 + Math.floor(i / 6) * 120, u = 14;
+          g.fillStyle = '#e8b97f'; g.strokeStyle = '#5b3d22'; g.lineWidth = 2;
+          t.cells.forEach(([x, y]) => { g.fillRect(ox + x * u, oy + y * u, u, u); g.strokeRect(ox + x * u, oy + y * u, u, u); });
+          g.fillStyle = '#3b2a1e'; g.font = '20px Jua, sans-serif'; g.fillText(t.mark, ox + 28, oy + 86);
+        });
+      });
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.5), new THREE.MeshBasicMaterial({ map: tex }));
+      m.position.set(4.3, 2.5, -3.97);
+      this.scene.add(m);
+    }
+    if (d.lights) {
+      const cols = [0xff6b6b, 0xffd93d, 0x6bcb77, 0x4d96ff, 0xc77dff];
+      this.bulbs = [];
+      for (let i = 0; i < 28; i++) {
+        const x = -4.8 + i * 0.4, y = 3.0 + Math.sin(i * 0.9) * 0.08;
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial({ color: cols[i % cols.length] }));
+        b.position.set(x, y, -3.9);
+        this.scene.add(b); this.bulbs.push(b);
+      }
+    }
+  }
+
   async _loadModels(character) {
     const loader = new GLTFLoader();
     const put = async (file, x, y, z, ry = 0) => {
@@ -232,7 +272,7 @@ export class Factory {
         return g;
       } catch (e) { console.warn('모델을 불러오지 못함', file, e); return null; }
     };
-    const who = character === 'f' ? 'railway-carter-971897' : 'construction-worker-c1ad8c';
+    const who = character;
     const st = STATIONS.bench.stand;
     const pg = await put(who, st[0], 0, st[1], Math.PI);
     if (pg) this._setupPlayer(pg);
@@ -241,6 +281,7 @@ export class Factory {
     put('rooted-gantry-arm-f35c8f', -1.6, 0, -2.4, 0.5);
     put('timber-eur-pallet-a1f655', 2.0, 0, -2.6);
     put('material-pallet-6af263', 3.5, 0, -2.7, 0.3);
+    if (this.decor.plants) { put('floor-houseplant-8fad17', -4.6, 0, 3.6); put('potted-shrub-43bd21', 3.9, 0, 3.5); }
   }
 
   // ---------- 일꾼 ----------
@@ -387,6 +428,7 @@ export class Factory {
     this.camera.position.copy(pos);
     this.camera.lookAt(c.target);
     if (this.beltMoving) this.beltTex.offset.x -= dt * 1.6;
+    if (this.bulbs) { const tt = now / 400; this.bulbs.forEach((b, i) => { b.visible = Math.sin(tt + i * 1.7) > -0.6; }); }
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -703,11 +745,51 @@ export class Factory {
     return m;
   }
 
-  addTape(e, color = 0xc49a5c) {
+  // 스테이플러 철심: 모서리를 가로질러 두 면에 걸친 은색 ㄷ자 심 3개
+  addStaple(e) {
+    const a = new THREE.Vector3(...e.a), b = new THREE.Vector3(...e.b);
+    const g = new THREE.Group();
+    const mat = new THREE.MeshLambertMaterial({ color: 0xc8ccd2 });
+    const ctr = [0, 1, 2].map((k) => (this.A.bbox.mn[k] + this.A.bbox.mx[k]) / 2);
+    const others = [0, 1, 2].filter((k) => k !== e.axis);
+    const len = Math.min(0.55, 0.22 * Math.min(...this.A.dims));
+    [0.2, 0.5, 0.8].forEach((f) => {
+      const c = new THREE.Vector3().lerpVectors(a, b, f).toArray();
+      const inward = c.map((v, k) => Math.sign(ctr[k] - v));
+      others.forEach((k) => {
+        const o = others.find((x) => x !== k);
+        const s = [0.07, 0.07, 0.07]; s[o] = len; s[k] = 0.04;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(...s), mat);
+        const pos = [...c]; pos[o] += inward[o] * len / 2; pos[k] += -inward[k] * 0.03;
+        m.position.set(...pos);
+        g.add(m);
+      });
+    });
+    this.rig.group.add(g);
+    return g;
+  }
+
+  // 택배 전용 테이프: 크림색 바탕에 공장 색(청록) 줄무늬. 골판지 갈색과 헷갈리지 않는다.
+  _tapeMat(len) {
+    if (!this.tapeTex) {
+      this.tapeTex = canvasTex(64, 64, (g) => {
+        g.fillStyle = '#f6efd9'; g.fillRect(0, 0, 64, 64);
+        g.strokeStyle = '#23807b'; g.lineWidth = 14;
+        for (let x = -64; x < 128; x += 64) { g.beginPath(); g.moveTo(x, 64); g.lineTo(x + 64, 0); g.stroke(); }
+      });
+      this.tapeTex.wrapS = this.tapeTex.wrapT = THREE.RepeatWrapping;
+    }
+    const t = this.tapeTex.clone();
+    t.repeat.set(Math.max(1, len / 1.2), Math.max(1, len / 1.2));
+    t.needsUpdate = true;
+    return new THREE.MeshPhongMaterial({ map: t, shininess: 60, specular: 0x444444, transparent: true, opacity: 0.96 });
+  }
+
+  addTape(e) {
     const a = new THREE.Vector3(...e.a), b = new THREE.Vector3(...e.b);
     const len = a.distanceTo(b);
     const g = new THREE.Group();
-    const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.9 });
+    const mat = this._tapeMat(len);
     const tw = Math.min(0.7, 0.2 * Math.min(...this.A.dims));
     const c = [(e.a[0] + e.b[0]) / 2, (e.a[1] + e.b[1]) / 2, (e.a[2] + e.b[2]) / 2];
     const ctr = [(this.A.bbox.mn[0] + this.A.bbox.mx[0]) / 2, (this.A.bbox.mn[1] + this.A.bbox.mx[1]) / 2, (this.A.bbox.mn[2] + this.A.bbox.mx[2]) / 2];

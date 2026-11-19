@@ -12,6 +12,10 @@ Timber EUR Pallet by Polyfork (https://polyfork.dev/asset/timber-eur-pallet-a1f6
 Material Pallet by Polyfork (https://polyfork.dev/asset/material-pallet-6af263), CC BY 4.0
 Construction Worker by Polyfork (https://polyfork.dev/asset/construction-worker-c1ad8c), CC BY 4.0
 Railway Carter by Polyfork (https://polyfork.dev/asset/railway-carter-971897), CC BY 4.0
+Delivery Courier by Polyfork (https://polyfork.dev/asset/delivery-courier-327e30), CC BY 4.0
+Station Master by Polyfork (https://polyfork.dev/asset/station-master-1d6a0a), CC BY 4.0
+Potted Shrub by Polyfork (https://polyfork.dev/asset/potted-shrub-43bd21), CC BY 4.0
+Floor Houseplant by Polyfork (https://polyfork.dev/asset/floor-houseplant-8fad17), CC BY 4.0
 바꾼 것: 모델 파일(models/*.glb)은 그대로 쓰고, 일꾼의 걷기 동작은 제자리에서 걷도록 엉덩이 앞뒤 이동만 없애서 쓰며, 로봇 팔은 Blender로 투명 배경 그림(img/robot.webp)으로도 렌더링해서 사용했습니다.
 라이선스: https://creativecommons.org/licenses/by/4.0/
 이 게임은 Polyfork가 만들거나 추천한 것이 아닙니다.

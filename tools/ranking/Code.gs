@@ -44,8 +44,10 @@ var DAYS = [
   { items: ['icecream', 'milk', 'cake', 'pizza', 'plant', 'frame', 'mug'], time: 360, every: 52, target: 13000 },
   { items: ['umbrella', 'blocks', 'shoe', 'robot', 'book', 'game', 'milk', 'pizza'], time: 360, every: 50, target: 14000, sketch: 1 },
 ];
-var COST = { tape: 10, sticker: 50, guard: 60, foil: 40 };
+var COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, staple: 40 };
 var COMBO_STEP = 300, COMBO_MAX = 1500, SKETCH_PAY = 300, TRUCK_PLUS = 30, MAX_TIP = 0.3;
+var REGULAR_TIP = 500;      // 단골 손님: 실수 없이 보내면 팁 (js/data.js EVENTS.regular.tip)
+var MAX_EVENT_SHARE = 0.5; // 급한 주문·단골 손님은 많아야 상자의 절반쯤
 var MIN_GAP = 15;          // 상자 하나를 출고하는 데 걸리는 가장 짧은 시간(초)
 var NET_COUNT = 11;        // 정육면체 전개도 유형 수
 
@@ -74,7 +76,9 @@ function payFor(it) {
 }
 function minMaterial(it) {
   var a = it.d[0], b = it.d[1], c = it.d[2];
-  return 4 * (a + b + c) * COST.tape + 6 * COST.sticker + (it.fragile ? 8 * COST.guard : 0) + (it.cold ? 6 * COST.foil : 0) + (it.up ? 4 * COST.sticker : 0);
+  // 테이프: 접힌 모서리 5곳은 꼭 테이프(가장 싼 롤 값), 잘린 모서리 7곳은 스테이플러로 대신할 수 있다
+  var tapeMin = 5 * Math.min(a, b, c) * Math.min(COST.tape, COST.roll || COST.tape);
+  return tapeMin + 6 * COST.sticker + (it.fragile ? 8 * COST.guard : 0) + (it.cold ? 6 * COST.foil : 0) + (it.up ? 4 * COST.sticker : 0);
 }
 function maxOrders(cfg) { return 1 + Math.floor((cfg.time + TRUCK_PLUS - 42) / cfg.every); }
 function hashPin(cls, nick, pin) {
@@ -152,7 +156,7 @@ function submit(cls, nick, q) {
   // 2) 출고 기록
   var log = Array.isArray(q.log) ? q.log : [];
   if (log.length > maxOrders(cfg)) return fail('그날 올 수 있는 주문보다 상자가 많아요');
-  var last = -MIN_GAP, maxRev = 0, chain = [], bestCombo = 0, perfect = 0, nets = {};
+  var last = -MIN_GAP, maxRev = 0, chain = [], bestCombo = 0, perfect = 0, nets = {}, events = 0;
   for (var j = 0; j < log.length; j++) {
     var b = log[j], it = ITEMS[b.item];
     if (!it || cfg.items.indexOf(b.item) < 0) return fail('그날 나오지 않는 물건이 있어요');
@@ -162,7 +166,10 @@ function submit(cls, nick, q) {
     if (t - last < MIN_GAP) return fail('상자를 너무 빨리 출고했어요');
     last = t;
     var pay = payFor(it) + (b.sketch ? SKETCH_PAY : 0);
+    if (b.ev === 'urgent' || b.ev === 'regular') events++;
+    if (b.ev === 'urgent') pay *= 2;                       // 급한 주문: 돈 2배
     maxRev += pay + Math.round(pay * MAX_TIP / 100) * 100 - minMaterial(it);
+    if (b.ev === 'regular' && Number(b.mistakes) === 0) maxRev += REGULAR_TIP;
     if (b.net != null) {
       var n = Number(b.net);
       if (!(n >= 1 && n <= NET_COUNT)) return fail('전개도 유형이 이상해요');
@@ -173,6 +180,7 @@ function submit(cls, nick, q) {
     }
     if (Number(b.mistakes) === 0) perfect++;
   }
+  if (events > Math.ceil(log.length * MAX_EVENT_SHARE) + 1) return fail('특별 손님이 너무 많아요');
   // 3) 매출: 기록으로 계산한 최대치를 넘으면 조작
   var earned = Math.round(Number(q.earned) || 0);
   if (earned > maxRev + 100) return fail('매출이 출고 기록보다 많아요');

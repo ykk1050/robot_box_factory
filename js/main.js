@@ -1,12 +1,12 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
-import { ITEMS, CUSTOMERS, COST, BAG, dayConfig, UPGRADES, payFor } from './data.js';
+import { ITEMS, CUSTOMERS, COST, BAG, EVENTS, OUTFITS, DECOR, dayConfig, UPGRADES, payFor } from './data.js';
 import { RANK_URL, RANK_ALL, TEST, rankOn, CATS, call } from './rank.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.025';
+export const VERSION = window.BUILD || 'v1.026';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
-let analyzeNet, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
+let analyzeNet, netBoundary, netLines, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
 // 학교 와이파이에서 파일 하나가 잠깐 끊겨도 멈추지 않게, 실패하면 잠깐 쉬었다가 3번까지 다시 받는다
 let workPromise = null;
 const loadWork = () => {
@@ -15,7 +15,7 @@ const loadWork = () => {
     for (let i = 0; ; i++) {
       try {
         const [f, n, c, t] = await Promise.all([import('./factory.js'), import('./net.js'), import('./cutter.js'), import('./nettype.js')]);
-        analyzeNet = n.analyzeNet; Cutter = c.Cutter; boxPicture = c.boxPicture; sketchPicture = c.sketchPicture; STATIONS = f.STATIONS;
+        analyzeNet = n.analyzeNet; netBoundary = n.netBoundary; netLines = n.netLines; Cutter = c.Cutter; boxPicture = c.boxPicture; sketchPicture = c.sketchPicture; STATIONS = f.STATIONS;
         classifyNet = t.classifyNet; NET_TYPES = t.NET_TYPES; NET_GROUPS = t.NET_GROUPS; netTypePicture = t.netTypePicture;
         return f.Factory;
       } catch (e) {
@@ -33,7 +33,7 @@ const comboBonus = (len) => Math.min(COMBO_MAX, Math.max(0, len - 1) * COMBO_STE
 
 // ---------- 저장 ----------
 const SAVE_KEY = 'robot-box-factory-v2';
-let save = { day: 1, money: 0, up: {}, dies: {}, best: {}, sound: true, char: 'm', nets: {}, tutorialDone: false };
+let save = { day: 1, money: 0, up: {}, dies: {}, best: {}, sound: true, char: 'm', nets: {}, tutorialDone: false, owned: {}, decor: {}, cube: {} };
 try { save = { ...save, ...JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') }; } catch (_) { /* 무시 */ }
 if (save.up.helper) { delete save.up.helper; save.money += 6000; } // 없어진 업그레이드는 돈으로 돌려준다
 if (save.rank && save.rank.cls !== '전체') delete save.rank; // 반별 랭킹을 없애서, 예전 이름표는 다시 참가해야 한다
@@ -87,11 +87,11 @@ function showTitle() {
   for (let d = 1; d <= save.day; d++) {
     chips.append(h('button', { class: 'chip' + (d === save.day ? ' now' : ''), onclick: () => { sfx('click'); showIntro(d); } }, `${d}일차 ${'★'.repeat(save.best[d] || 0)}`));
   }
-  const charBtns = h('div', { class: 'row center' });
+  const charBtns = h('div', { class: 'row center wrap' });
   const drawChar = () => {
     charBtns.innerHTML = '';
-    [['m', '👷‍♂️', '남자 기사'], ['f', '👷‍♀️', '여자 기사']].forEach(([id, em, name]) => {
-      charBtns.append(h('button', { class: 'charbtn' + (save.char === id ? ' sel' : ''), onclick: () => { save.char = id; store(); sfx('click'); drawChar(); } }, h('span', { class: 'cem' }, em), name));
+    OUTFITS.filter((o) => !o.price || save.owned[o.id]).forEach((o) => {
+      charBtns.append(h('button', { class: 'charbtn' + (save.char === o.id ? ' sel' : ''), onclick: () => { save.char = o.id; store(); sfx('click'); drawChar(); } }, h('span', { class: 'cem' }, o.icon), `${o.name}(${o.who})`));
     });
   };
   drawChar();
@@ -109,7 +109,8 @@ function showTitle() {
         h('button', { class: 'btn big ghost', onclick: () => { sfx('click'); showRanking(); } }, '🏆 랭킹')),
       h('div', { class: 'row center wrap', style: 'margin-top:10px' },
         h('button', { class: 'btn ghost' + (save.tutorialDone ? '' : ' tut-glow'), onclick: () => { sfx('click'); playDay(1, { tutorial: true }); } }, '🎓 조작 연습'),
-        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); loadWork().then(() => showNetGuide()).catch(() => {}); } }, '📐 전개도 유형 11가지')),
+        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); loadWork().then(() => showNetGuide()).catch(() => {}); } }, '📐 전개도 유형 11가지'),
+        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showStampCube(); } }, '🎲 도장 큐브')),
       h('p', { class: 'muted', style: 'margin:10px 0 4px' }, `모은 돈 ${won(save.money)}`),
       save.day > 1 ? chips : null),
     creditLine()));
@@ -172,27 +173,62 @@ async function showRanking(cat = 'day', day = save.day > 1 ? save.day - 1 : 1) {
   if (res.myRank > 30) list.append(h('p', { class: 'center' }, `내 순위: ${res.myRank}위`));
 }
 
-function showShop(after) {
+function showShop(after, tab = 'up') {
   leave();
   const list = h('div', { class: 'shop' });
   const moneyEl = h('b', {}, won(save.money));
+  const tabs = h('div', { class: 'row center wrap' });
+  const isOne = (slot) => slot === 'floor' || slot === 'wall';
+  const buy = (price, fn) => { if (save.money < price) return; save.money -= price; fn(); store(); sfx('ok'); draw(); };
+  const item = (icon, name, desc, right, on) => h('div', { class: 'shop-item' + (on ? ' owned' : '') }, h('span', { class: 'sicon' }, icon), h('div', { class: 'sbody' }, h('b', {}, name), desc ? h('p', {}, desc) : null), right);
+  const priceBtn = (price, fn) => h('button', { class: 'btn', disabled: save.money < price ? true : null, onclick: () => buy(price, fn) }, won(price));
   const draw = () => {
-    list.innerHTML = '';
+    list.innerHTML = ''; tabs.innerHTML = '';
     moneyEl.textContent = won(save.money);
-    UPGRADES.forEach((u) => {
+    [['up', '⚙️ 업그레이드'], ['decor', '🏭 공장 꾸미기'], ['outfit', '👷 기사 옷']].forEach(([id, t]) => tabs.append(h('button', { class: 'chip' + (tab === id ? ' now' : ''), onclick: () => { sfx('click'); tab = id; draw(); } }, t)));
+    if (tab === 'up') UPGRADES.forEach((u) => {
       const owned = !!save.up[u.id];
-      list.append(h('div', { class: 'shop-item' + (owned ? ' owned' : '') },
-        h('span', { class: 'sicon' }, u.icon),
-        h('div', { class: 'sbody' }, h('b', {}, u.name), h('p', {}, u.desc)),
-        owned ? h('span', { class: 'tag' }, '보유') :
-          h('button', { class: 'btn', disabled: save.money < u.price ? true : null, onclick: () => { save.money -= u.price; save.up[u.id] = true; store(); sfx('ok'); draw(); } }, won(u.price))));
+      list.append(item(u.icon, u.name, u.desc, owned ? h('span', { class: 'tag' }, '보유') : priceBtn(u.price, () => { save.up[u.id] = true; }), owned));
+    });
+    if (tab === 'decor') DECOR.forEach((d) => {
+      const owned = !!save.owned[d.id];
+      const on = isOne(d.slot) ? save.decor[d.slot] === d.id : !!save.decor[d.slot];
+      const toggle = h('button', { class: 'btn ' + (on ? '' : 'ghost'), onclick: () => {
+        sfx('click');
+        if (isOne(d.slot)) save.decor[d.slot] = on ? null : d.id; else save.decor[d.slot] = !on;
+        store(); draw();
+      } }, on ? '꾸밈 중 ✔' : '꾸미기');
+      list.append(item(d.icon, d.name, isOne(d.slot) ? '바닥·벽은 하나만 고를 수 있어요. 다시 누르면 기본으로 돌아가요.' : '',
+        owned ? toggle : priceBtn(d.price, () => { save.owned[d.id] = true; save.decor[d.slot] = isOne(d.slot) ? d.id : true; }), on));
+    });
+    if (tab === 'outfit') OUTFITS.forEach((o) => {
+      const owned = !o.price || !!save.owned[o.id];
+      const on = save.char === o.id;
+      list.append(item(o.icon, `${o.name} (${o.who})`, on ? '지금 입고 있어요.' : '',
+        owned ? h('button', { class: 'btn ' + (on ? '' : 'ghost'), onclick: () => { sfx('click'); save.char = o.id; store(); draw(); } }, on ? '입는 중 ✔' : '입기')
+          : priceBtn(o.price, () => { save.owned[o.id] = true; save.char = o.id; }), on));
     });
   };
   draw();
   app.append(h('div', { class: 'screen shop-screen' },
     h('div', { class: 'topline' }, h('button', { class: 'btn ghost', onclick: () => { sfx('click'); (after || showTitle)(); } }, '← 돌아가기'), h('h2', {}, '🛒 공장 상점'), h('span', { class: 'pill' }, '💰 ', moneyEl)),
-    h('p', { class: 'muted center' }, '택배로 번 돈으로 공장을 업그레이드해요.'),
-    list, creditLine()));
+    h('p', { class: 'muted center' }, '택배로 번 돈으로 공장을 업그레이드하고 꾸며요.'),
+    tabs, list, creditLine()));
+}
+
+// ---------- 쉬는 시간: 도장 큐브 ----------
+async function showStampCube(after) {
+  leave();
+  app.append(h('div', { class: 'screen title' }, h('p', { class: 'lead' }, '도장 큐브를 꺼내는 중…')));
+  const ok = await Promise.race([loadWork().then(() => true), new Promise((r) => setTimeout(() => r(false), 20000))]).catch(() => false);
+  app.innerHTML = '';
+  if (!ok) { app.append(h('div', { class: 'screen title' }, h('div', { class: 'card' }, h('p', {}, '불러오지 못했어요. 인터넷 연결을 확인해 주세요.'), h('button', { class: 'btn', onclick: () => location.reload() }, '다시 열기')))); return; }
+  const { stampCube } = await import('./stampcube.js');
+  cleanup = stampCube(app, {
+    h, sfx, types: NET_TYPES, cleared: save.cube || {},
+    onReward: (m, id) => { save.money += m; save.cube = { ...(save.cube || {}), [id]: true }; store(); },
+    onExit: () => (after || showTitle)(),
+  });
 }
 
 // ---------- 하루 시작 ----------
@@ -285,7 +321,7 @@ async function playDay(n, opts = {}) {
   const root = h('div', { class: 'screen play' }, gl, hud, leftCol, side, cutWrap, panel, rollPad, robot, nav, fx);
   if (tutorial) root.classList.add('tut');
   app.append(root);
-  const F = new Factory(gl, { character: save.char, walkSpeed: save.up.shoes ? 3.5 : 2.2 });
+  const F = new Factory(gl, { character: (OUTFITS.find((o) => o.id === save.char) || OUTFITS[0]).model, walkSpeed: save.up.shoes ? 3.5 : 2.2, decor: save.decor || {}, netTypes: NET_TYPES });
   F.view('follow');
 
   // 상태
@@ -294,10 +330,10 @@ async function playDay(n, opts = {}) {
   let earned = 0, done = 0, missed = 0, paused = false, over = false;
   let orders = [], active = null, spawnIn = 2, orderSeq = 0;
   let where = 'bench', place = 'walk'; // place: walk | cut | work | station | busy
-  const inv = { tape: {}, base: 0, side: 0, guard: 0, foil: 0, up: 0 };
+  const inv = { tape: {}, roll: 0, base: 0, side: 0, guard: 0, foil: 0, up: 0 };
   // 가방: 재료 한 개(테이프 1줄, 스티커 1장, 보호대 1개, 은박 1장)가 한 칸
   const bagCap = () => (save.up.bag ? BAG.big : BAG.base);
-  const bagUsed = () => Object.values(inv.tape).reduce((a, b) => a + b, 0) + inv.base + inv.side + inv.guard + inv.foil + inv.up;
+  const bagUsed = () => Object.values(inv.tape).reduce((a, b) => a + b, 0) + (inv.roll > 0 ? 1 : 0) + inv.base + inv.side + inv.guard + inv.foil + inv.up;
   function bagFits(more) {
     const used = bagUsed(), cap = bagCap();
     if (used + more <= cap) return true;
@@ -669,7 +705,16 @@ async function playDay(n, opts = {}) {
     const key = first ? 'puzzle' : cfg.items[Math.floor(Math.random() * cfg.items.length)];
     const item = ITEMS[key];
     const sketch = !first && !tutorial && Math.random() < (cfg.sketch || 0);
-    orders.push({ id: ++orderSeq, item, sketch, cust: CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)], pay: payFor(item) + (sketch ? 300 : 0), patience: cfg.patience, left: cfg.patience, mistakes: 0 });
+    // 특별 손님: ⚡ 급한 주문(기다리는 시간 절반, 돈 2배), ⭐ 단골 손님(실수 없이 보내면 팁)
+    const r = Math.random();
+    const ev = first || tutorial ? null : n >= EVENTS.urgent.from && r < EVENTS.urgent.chance ? 'urgent' : r < EVENTS.urgent.chance + EVENTS.regular.chance ? 'regular' : null;
+    let cust = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
+    if (ev === 'regular') cust = '⭐ 단골 ' + cust;
+    const base = payFor(item) + (sketch ? 300 : 0);
+    const pat = ev === 'urgent' ? Math.round(cfg.patience / 2) : cfg.patience;
+    orders.push({ id: ++orderSeq, item, sketch, ev, cust, pay: ev === 'urgent' ? base * 2 : base, patience: pat, left: pat, mistakes: 0 });
+    if (ev === 'urgent') say(`⚡ 급한 주문이 들어왔어요! 손님이 오래 못 기다리지만 돈을 2배로 줘요.`);
+    else if (ev === 'regular') say(`⭐ 단골 손님 주문이에요! 실수 없이 보내면 팁 ${won(EVENTS.regular.tip)}을 줘요.`);
     sfx('click');
     drawTickets();
   }
@@ -680,7 +725,8 @@ async function playDay(n, opts = {}) {
       if (o === active) return;
       if (!o.el) {
         o.bar = h('i');
-        o.el = h('button', { class: 'ticket', onclick: () => pickOrder(o) },
+        o.el = h('button', { class: 'ticket' + (o.ev ? ' ev-' + o.ev : ''), onclick: () => pickOrder(o) },
+          o.ev ? h('span', { class: 'evtag' }, o.ev === 'urgent' ? '⚡ 급한 주문 ×2' : '⭐ 단골') : null,
           h('span', { class: 'temoji' }, o.item.emoji),
           h('span', { class: 'tbody' }, h('b', {}, o.item.name), h('small', {}, o.sketch ? '📐 겨냥도 주문' : `가로 ${o.item.d[0]} · 세로 ${o.item.d[2]} · 높이 ${o.item.d[1]}`), h('small', { class: 'pay' }, won(o.pay) + markIcons(o.item))),
           h('span', { class: 'pat' }, o.bar));
@@ -699,6 +745,8 @@ async function playDay(n, opts = {}) {
     o.pinBar = h('i');
     orderPin.append(...[
       h('div', { class: 'row' }, h('span', { class: 'temoji big' }, o.item.emoji), h('div', { class: 'pname' }, h('b', {}, o.item.name), h('small', {}, o.cust)), h('span', { class: 'pay' }, won(o.pay))),
+      o.ev === 'urgent' ? h('p', { class: 'fragile ev' }, '⚡ 급한 주문: 기다리는 시간이 절반, 돈은 2배!') : null,
+      o.ev === 'regular' ? h('p', { class: 'fragile ev' }, `⭐ 단골 손님: 실수 없이 보내면 팁 ${won(EVENTS.regular.tip)}`) : null,
       o.sketch ? h('p', { class: 'fragile' }, '📐 겨냥도 주문: 길이를 보고 가로·세로·높이를 찾아요') : null,
       (o.sketch ? sketchPicture : boxPicture)(o.item.d, 210),
       o.item.fragile ? h('p', { class: 'fragile' }, '🛡 깨지기 쉬워요! 꼭짓점 8개마다 꼭짓점 보호대') : null,
@@ -777,6 +825,12 @@ async function playDay(n, opts = {}) {
       oops('빨간 면이 떨어져 있어요! 전개도의 면은 길이가 같은 모서리끼리 이어져 있어야 접을 수 있어요.');
       return;
     }
+    // 맞는 전개도면 접기 전에 스테이플러 단계(접었을 때 만나는 선분 잇기)를 거친다
+    let glued = [];
+    if (A.valid && !A.problem && !tutorial) {
+      glued = await stapleStage(rects, A);
+      if (!active || over) return;
+    }
     place = 'busy';
     sfx('fold');
     cutWrap.classList.add('hidden');
@@ -827,7 +881,89 @@ async function playDay(n, opts = {}) {
     await F.tumble(Math.floor(Math.random() * 5));
     if (!active || over) return;
     F.setupPacking();
+    // 스테이플러로 이어 둔 선분은 접으면서 철심이 박혀 붙은 모서리가 된다
+    if (glued.length) {
+      const key = (p) => p.map((v) => Math.round(v * 1000) / 1000).join(',');
+      let k = 0;
+      glued.forEach((sg) => {
+        const want = [key(sg.p3a), key(sg.p3b)].sort().join('|');
+        const e = F.edges.find((x) => [key(x.a), key(x.b)].sort().join('|') === want);
+        if (e && !active.taped.has(e.id)) { active.taped.add(e.id); F.addStaple(e); k++; }
+      });
+      if (k) setTimeout(() => { if (active) say(`🔩 스테이플러로 이어 둔 모서리 ${k}개는 접으면서 철심이 콕! 나머지 모서리에 테이프를 붙여요.`, 'happy'); }, 1500);
+    }
     enterWork();
+  }
+
+  // ---------- 스테이플러: 접었을 때 만나는 선분 잇기 (겹치는 점·선분) ----------
+  function stapleStage(rects, A) {
+    return new Promise((resolve) => {
+      const { points, segs } = netBoundary(rects, A);
+      place = 'glue';
+      const glued = [];
+      const color = new Map();
+      const COLORS = ['#f4b942', '#6fc3df', '#a4d36b', '#f08fb5', '#b79cf0', '#f5925a', '#5fd1b0'];
+      let sel = null;
+      cutWrap.innerHTML = '';
+      cutWrap.append(h('div', { class: 'ctools' },
+        h('span', { class: 'ctitle' }, '🔩 스테이플러 · 접었을 때 만나는 두 선분을 차례로 눌러요 (안 해도 돼요)'),
+        h('button', { class: 'btn warn', onclick: () => { sfx('click'); resolve(glued); } }, '접기 ▶')));
+      const host = h('div', { class: 'sheet-host' });
+      cutWrap.append(host);
+      const NS = 'http://www.w3.org/2000/svg';
+      const S = (tag, a = {}) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); return e; };
+      const xs = rects.flatMap((r) => [r.x, r.x + r.w]), ys = rects.flatMap((r) => [r.y, r.y + r.h]);
+      const x0 = Math.min(...xs), y0 = Math.min(...ys), W = Math.max(...xs) - x0, H = Math.max(...ys) - y0;
+      const u = Math.max(W, H) / 12;
+      const svg = S('svg', { viewBox: `${x0 - u * 1.6} ${y0 - u * 1.6} ${W + u * 3.2} ${H + u * 3.2}`, preserveAspectRatio: 'xMidYMid meet', class: 'sheet' });
+      host.append(svg);
+      const cx = x0 + W / 2, cy = y0 + H / 2;
+      const draw = () => {
+        svg.innerHTML = '';
+        rects.forEach((r) => svg.append(S('rect', { x: r.x, y: r.y, width: r.w, height: r.h, fill: '#fbe9cf' })));
+        netLines(rects, A).fold.forEach(({ p, q }) => svg.append(S('line', { x1: p[0], y1: p[1], x2: q[0], y2: q[1], stroke: '#3b2a1e', 'stroke-width': u * 0.07, 'stroke-dasharray': `${u * 0.25} ${u * 0.2}` })));
+        segs.forEach((sg) => {
+          const c = sel === sg ? '#2f6fde' : color.get(sg.id) || '#3b2a1e';
+          const wide = color.has(sg.id) || sel === sg;
+          svg.append(S('line', { x1: sg.a.x, y1: sg.a.y, x2: sg.b.x, y2: sg.b.y, stroke: c, 'stroke-width': u * (wide ? 0.34 : 0.1), 'stroke-linecap': 'round' }));
+          const hit = S('line', { x1: sg.a.x, y1: sg.a.y, x2: sg.b.x, y2: sg.b.y, stroke: 'transparent', 'stroke-width': u * 1.1 });
+          hit.style.cursor = 'pointer';
+          hit.addEventListener('pointerup', () => onSeg(sg));
+          svg.append(hit);
+        });
+        points.forEach((p) => {
+          svg.append(S('circle', { cx: p.x, cy: p.y, r: u * 0.18, fill: '#fff', stroke: '#3b2a1e', 'stroke-width': u * 0.05 }));
+          const dx = p.x - cx, dy = p.y - cy, dl = Math.hypot(dx, dy) || 1;
+          const t = S('text', { x: p.x + (dx / dl) * u * 0.7, y: p.y + (dy / dl) * u * 0.7 + u * 0.26, 'font-size': u * 0.72, 'text-anchor': 'middle', fill: '#3b2a1e', 'font-family': 'Jua, sans-serif' });
+          t.textContent = p.name; t.style.pointerEvents = 'none';
+          svg.append(t);
+        });
+      };
+      const nm = (sg) => `선분 ${sg.a.name}${sg.b.name}`;
+      function onSeg(sg) {
+        if (color.has(sg.id)) { say(`${nm(sg)}은 벌써 스테이플러로 이어 두었어요.`); return; }
+        if (!sel) { sel = sg; sfx('click'); draw(); say(`${nm(sg)}을 골랐어요. 접었을 때 이 선분과 만나는 선분을 눌러요.`); return; }
+        if (sel === sg) { sel = null; draw(); return; }
+        const a = sel; sel = null;
+        if (a.partner === sg.id) {
+          const c = COLORS[glued.length % COLORS.length];
+          color.set(a.id, c); color.set(sg.id, c);
+          glued.push(a);
+          money(-COST.staple, '철심');
+          sfx('tape');
+          // 겹치는 점도 알려 준다
+          const pair = [a.a, a.b].map((p) => `점 ${p.name}은 점 ${[sg.a, sg.b].find((q) => q.k3 === p.k3).name}과`).join(', ');
+          say(`철컥! ${nm(a)}과 ${nm(sg)}이 접으면 만나요. ${pair} 겹쳐요.`, 'happy');
+        } else {
+          oops(`${nm(a)}과 ${nm(sg)}은 접으면 서로 다른 곳에 가요. 선분 끝의 두 점이 접었을 때 각각 어느 점과 겹칠지 생각해 봐요.`, 0);
+        }
+        draw();
+      }
+      draw();
+      setSide(h('p', { class: 'hint' }, '🔩 스테이플러로 이어 둔 선분은 접을 때 철심이 박혀서 테이프가 필요 없어요. 맞는 짝을 찾을수록 테이프 값과 시간을 아껴요.'),
+        h('p', { class: 'hint' }, `철심은 한 곳에 ${won(COST.staple)}이에요. 접었을 때 만나는 선분은 길이가 같아요.`), invView());
+      say('전개도를 접으면 어떤 선분끼리 만날까요? 만나는 두 선분을 스테이플러로 이어 봐요!');
+    });
   }
 
   // ---------- 포장 (작업대에서 재료 붙이기) ----------
@@ -846,7 +982,7 @@ async function playDay(n, opts = {}) {
   function invView() {
     const tapes = Object.entries(inv.tape).filter(([, c]) => c > 0).map(([l, c]) => `${l}cm×${c}`);
     return h('div', { class: 'inv' }, h('b', {}, '🎒 들고 있는 재료'),
-      h('p', {}, `🩹 테이프 ${tapes.length ? tapes.join(', ') : '없음'}`),
+      h('p', {}, `🩹 테이프 ${tapes.length ? tapes.join(', ') : '없음'}${inv.roll > 0 ? ` · 🧻 롤 ${inv.roll}cm` : ''}`),
       h('p', {}, `📦 밑면 스티커 ${inv.base}장 · 🏷 옆면 스티커 ${inv.side}장 · ⬆️ 화살표 ${inv.up}장`),
       h('p', {}, `🛡 보호대 ${inv.guard}개 · 🧊 은박 ${inv.foil}장`),
       h('p', { class: 'bagline' + (bagUsed() >= bagCap() ? ' full' : '') }, `🎒 가방 ${bagUsed()}/${bagCap()}칸`));
@@ -903,7 +1039,15 @@ async function playDay(n, opts = {}) {
     if (tool === 'tape' && hit.type === 'edge') {
       const e = hit.edge;
       if (o.taped.has(e.id)) { say('이 모서리는 벌써 붙였어요.'); return; }
+      if (!inv.tape[e.len] && inv.roll >= e.len) {
+        inv.roll -= e.len;
+        o.taped.add(e.id); F.addTape(e); sfx('tape');
+        drawWorkSide(); tutEv('use'); tutDemoNow();
+        if (inv.roll < 1) say('🧻 테이프 롤을 다 썼어요.');
+        return;
+      }
       if (!inv.tape[e.len]) {
+        if (inv.roll > 0) { say(`이 모서리는 ${e.len}cm인데 롤이 ${inv.roll}cm밖에 안 남았어요. 테이프 출력기에서 더 뽑아 와요.`, 'sad'); sfx('no'); return; }
         const have = Object.keys(inv.tape).filter((l) => inv.tape[l] > 0);
         say(have.length ? `이 모서리는 ${e.len}cm예요. ${e.len}cm 테이프가 없어요. 테이프 출력기에서 뽑아 와요.` : '테이프가 없어요. 테이프 출력기에 가서 길이와 개수를 넣고 뽑아 와요.', 'sad');
         sfx('no');
@@ -979,8 +1123,9 @@ async function playDay(n, opts = {}) {
     if (o.loose) pay = Math.round(pay * 0.7 / 100) * 100;
     if (fast) pay += Math.round(o.pay * (save.up.sign ? 0.3 : 0.2) / 100) * 100;
     done++;
-    money(pay, fast ? '빠른 배송 팁!' : '');
-    shipLog.push({ t: Math.round(total - timeLeft), item: Object.keys(ITEMS).find((k) => ITEMS[k] === o.item), sketch: o.sketch ? 1 : 0, net: o.net ? o.net.id : null, mistakes: o.mistakes });
+    money(pay, fast ? '빠른 배송 팁!' : o.ev === 'urgent' ? '⚡ 급한 주문 2배!' : '');
+    if (o.ev === 'regular' && o.mistakes === 0) setTimeout(() => { if (!over) money(EVENTS.regular.tip, '⭐ 단골 손님 팁!'); }, 900);
+    shipLog.push({ ev: o.ev || null, t: Math.round(total - timeLeft), item: Object.keys(ITEMS).find((k) => ITEMS[k] === o.item), sketch: o.sketch ? 1 : 0, net: o.net ? o.net.id : null, mistakes: o.mistakes });
     sfx('ok');
     let comboMsg = '';
     if (o.net) {
@@ -1024,24 +1169,55 @@ async function playDay(n, opts = {}) {
     panel.classList.remove('hidden');
     const close = h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); panel.classList.add('hidden'); place = 'walk'; markNav(); } }, '닫기');
     if (id === 'tape') {
-      const rows = [{ len: 2, cnt: 0 }, { len: 3, cnt: 0 }, { len: 4, cnt: 0 }];
-      const sum = h('p', { class: 'sum' });
-      const upd = () => { const L = rows.reduce((s, r) => s + r.len * r.cnt, 0), C = rows.reduce((s, r) => s + r.cnt, 0); sum.textContent = `테이프 ${C}줄 · 모두 ${L}cm · 재료 값 ${won(L * COST.tape)}`; };
-      panel.append(h('h3', {}, '🩹 테이프 출력기'), h('p', { class: 'hint' }, `직육면체의 모서리에 붙일 테이프의 길이와 개수를 넣으면 잘라서 나와요. 길이가 같은 모서리가 몇 개씩인지 세어 봐요. (1cm에 ${won(COST.tape)})`),
-        ...rows.map((r) => h('div', { class: 'srow' }, h('span', {}, '길이'), stepper(r.len, 1, 9, (v) => { r.len = v; upd(); }, 'cm'), h('span', {}, '개수'), stepper(r.cnt, 0, 12, (v) => { r.cnt = v; upd(); }, '줄'))),
-        sum,
-        h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
-          const L = rows.reduce((s, r) => s + r.len * r.cnt, 0);
-          if (tutBlock('make:tape', rows)) return;
-          if (!L) { say('개수를 넣어야 테이프가 나와요.'); return; }
-          if (!bagFits(rows.reduce((s, r) => s + r.cnt, 0))) return;
-          rows.forEach((r) => { if (r.cnt) inv.tape[r.len] = (inv.tape[r.len] || 0) + r.cnt; });
-          money(-L * COST.tape, '테이프');
-          sfx('tape');
-          tutEv('made:tape');
-          stationDone(`테이프 ${rows.filter((r) => r.cnt).map((r) => `${r.len}cm ${r.cnt}줄`).join(', ')}이 나왔어요!`);
-        } }, '출력하기')));
-      upd();
+      // 두 가지 방법: ✂️ 길이별로 잘라 뽑기, 🧻 모서리 길이를 모두 더한 총 길이로 롤 하나 뽑기
+      let mode = save.tapeMode || 'cut';
+      const body = h('div');
+      const tabs = h('div', { class: 'row wrap' });
+      const draw = () => {
+        tabs.innerHTML = ''; body.innerHTML = '';
+        [['cut', '✂️ 길이별로 자르기'], ['roll', '🧻 총 길이 롤']].forEach(([m, t]) => tabs.append(h('button', { class: 'tool' + (mode === m ? ' sel' : ''), onclick: () => { if (tutorial && m === 'roll') return; mode = m; save.tapeMode = m; store(); sfx('click'); draw(); } }, t)));
+        if (mode === 'cut') {
+          const rows = [{ len: 2, cnt: 0 }, { len: 3, cnt: 0 }, { len: 4, cnt: 0 }];
+          const sum = h('p', { class: 'sum' });
+          const upd = () => { const L = rows.reduce((s, r) => s + r.len * r.cnt, 0), C = rows.reduce((s, r) => s + r.cnt, 0); sum.textContent = `테이프 ${C}줄 · 모두 ${L}cm · 재료 값 ${won(L * COST.tape)}`; };
+          body.append(h('p', { class: 'hint' }, `직육면체의 모서리에 붙일 테이프의 길이와 개수를 넣으면 잘라서 나와요. 길이가 같은 모서리가 몇 개씩인지 세어 봐요. (1cm에 ${won(COST.tape)})`),
+            ...rows.map((r) => h('div', { class: 'srow' }, h('span', {}, '길이'), stepper(r.len, 1, 9, (v) => { r.len = v; upd(); }, 'cm'), h('span', {}, '개수'), stepper(r.cnt, 0, 12, (v) => { r.cnt = v; upd(); }, '줄'))),
+            sum,
+            h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
+              const L = rows.reduce((s, r) => s + r.len * r.cnt, 0);
+              if (tutBlock('make:tape', rows)) return;
+              if (!L) { say('개수를 넣어야 테이프가 나와요.'); return; }
+              if (!bagFits(rows.reduce((s, r) => s + r.cnt, 0))) return;
+              rows.forEach((r) => { if (r.cnt) inv.tape[r.len] = (inv.tape[r.len] || 0) + r.cnt; });
+              money(-L * COST.tape, '테이프');
+              sfx('tape');
+              tutEv('made:tape');
+              stationDone(`테이프 ${rows.filter((r) => r.cnt).map((r) => `${r.len}cm ${r.cnt}줄`).join(', ')}이 나왔어요!`);
+            } }, '출력하기')));
+          upd();
+        } else {
+          let L = 0;
+          const num = h('span', { class: 'snum big' }, '0cm');
+          const sum = h('p', { class: 'sum' });
+          const set = (v) => { L = Math.max(0, Math.min(300, v)); num.textContent = `${L}cm`; sum.textContent = `재료 값 ${won(L * COST.roll)} (자를 때보다 싸요)`; sfx('click'); };
+          const b = (d) => h('button', { class: 'sbtn wide', onclick: () => set(L + d) }, d > 0 ? `+${d}` : `${d}`);
+          body.append(h('p', { class: 'hint' }, `붙일 모서리 길이를 모두 더한 만큼 롤로 뽑아요. 모서리에 붙일 때마다 그 길이만큼 잘려 나가요. 모서리 12개를 하나하나 더하지 않고 빨리 구하는 방법은 없을까요? (1cm에 ${won(COST.roll)})`),
+            h('div', { class: 'srow center' }, b(-10), b(-1), num, b(1), b(10)),
+            sum,
+            h('div', { class: 'row end' }, close, h('button', { class: 'btn warn', onclick: () => {
+              if (!L) { say('총 길이를 넣어야 롤이 나와요.'); return; }
+              if (inv.roll <= 0 && !bagFits(1)) return;
+              inv.roll += L;
+              money(-L * COST.roll, '테이프 롤');
+              sfx('tape');
+              stationDone(`🧻 ${L}cm 테이프 롤이 나왔어요! 지금 롤은 모두 ${inv.roll}cm예요.`);
+            } }, '롤 뽑기')));
+          set(0);
+        }
+      };
+      panel.append(h('h3', {}, '🩹 테이프 출력기'), tabs, body);
+      if (tutorial) mode = 'cut';
+      draw();
     } else if (id === 'sticker') {
       let b = 0, s = 0, u = 0;
       const sum = h('p', { class: 'sum' });
@@ -1195,6 +1371,7 @@ async function playDay(n, opts = {}) {
       h('div', { class: 'row end wrap' },
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); playDay(n); } }, '다시 하기'),
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showShop(showTitle); } }, '🛒 상점'),
+        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showStampCube(showTitle); } }, '🎲 쉬는 시간'),
         pass ? h('button', { class: 'btn', onclick: () => { sfx('click'); showTitle(); showIntro(n + 1); } }, `${n + 1}일차로 ▶`) : null))));
   }
 

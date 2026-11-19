@@ -28,7 +28,10 @@ export const ITEMS = {
 export const CUSTOMERS = ['🐰 토끼 문구점', '🐻 곰돌이 마트', '🦊 여우 서점', '🐱 고양이 카페', '🐼 판다 장난감 가게', '🐸 개구리 꽃집', '🦉 부엉이 도서관', '🐧 펭귄 빵집'];
 
 // 재료 값: 테이프 1cm, 스티커 1장, 보호대 1개
-export const COST = { tape: 10, sticker: 50, guard: 60, foil: 40 };
+// roll: 테이프 롤(총 길이로 뽑기) 1cm, staple: 스테이플러로 모서리 한 곳 찝기
+export const COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, staple: 40 };
+// 특별 손님: 급한 주문(기다리는 시간 절반, 돈 2배), 단골 손님(실수 없이 보내면 팁)
+export const EVENTS = { urgent: { chance: 0.15, from: 2 }, regular: { chance: 0.12, from: 1, tip: 500 } };
 
 // 가방: 테이프 1줄, 스티커 1장, 보호대 1개, 은박 1장이 각각 한 칸
 export const BAG = { base: 30, big: 50 };
@@ -69,3 +72,22 @@ export function payFor(item) {
   const [a, b, c] = item.d;
   return Math.round((1500 + 60 * 2 * (a * b + b * c + a * c) + (item.fragile ? 600 : 0) + (item.cold ? 500 : 0) + (item.up ? 300 : 0)) / 100) * 100;
 }
+
+// 기사 옷(캐릭터): model = models/ 안의 Polyfork 캐릭터 파일
+export const OUTFITS = [
+  { id: 'm', name: '안전모 기사', who: '남', icon: '👷‍♂️', model: 'construction-worker-c1ad8c', price: 0 },
+  { id: 'f', name: '초록 제복 기사', who: '여', icon: '👷‍♀️', model: 'railway-carter-971897', price: 0 },
+  { id: 'courier', name: '배달 기사', who: '남', icon: '🧑‍🔧', model: 'delivery-courier-327e30', price: 3000 },
+  { id: 'station', name: '남색 제복 기사', who: '여', icon: '👩‍✈️', model: 'station-master-1d6a0a', price: 3000 },
+];
+
+// 공장 꾸미기: slot이 같은 것(바닥, 벽)은 하나만 고른다
+export const DECOR = [
+  { id: 'floor-blue', slot: 'floor', name: '하늘 타일 바닥', icon: '🟦', price: 1500 },
+  { id: 'floor-wood', slot: 'floor', name: '나무 마루 바닥', icon: '🟫', price: 2500 },
+  { id: 'wall-mint', slot: 'wall', name: '민트색 벽', icon: '🟩', price: 1000 },
+  { id: 'wall-peach', slot: 'wall', name: '복숭아색 벽', icon: '🟧', price: 1000 },
+  { id: 'poster', slot: 'poster', name: '전개도 11가지 포스터', icon: '🖼️', price: 1200 },
+  { id: 'plants', slot: 'plants', name: '화분 두 개', icon: '🌱', price: 1500 },
+  { id: 'lights', slot: 'lights', name: '반짝 전구 줄', icon: '💡', price: 2000 },
+];
