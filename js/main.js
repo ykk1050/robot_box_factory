@@ -1,10 +1,10 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
-import { ITEMS, CUSTOMERS, COST, BAG, EVENTS, OUTFITS, DECOR, dayConfig, UPGRADES, payFor } from './data.js';
+import { ITEMS, CUSTOMERS, COST, BAG, EVENTS, GLUE_CHANCE, GLUE_HINT, OUTFITS, DECOR, DECOR_ONE, dayConfig, UPGRADES, payFor } from './data.js';
 import { RANK_URL, RANK_ALL, TEST, rankOn, CATS, call } from './rank.js';
 import { NICK, NICK_WORDS, NICK_STEPS } from './nickwords.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.029';
+export const VERSION = window.BUILD || 'v1.030';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, netBoundary, netLines, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -213,12 +213,34 @@ async function showRanking(cat = 'day', day = save.day > 1 ? save.day - 1 : 1) {
   if (res.myRank > 30) list.append(h('p', { class: 'center' }, `내 순위: ${res.myRank}위`));
 }
 
+// 공장 꾸미기 목록: 상점과 게임 중 🎨 꾸미기 창이 함께 쓴다. 사거나 바꾸면 onChange로 바로 알린다
+function fillDecor(list, onChange) {
+  const draw = () => {
+    list.innerHTML = '';
+    DECOR.forEach((d) => {
+      const one = DECOR_ONE.has(d.slot);
+      const owned = !!save.owned[d.id];
+      const on = one ? save.decor[d.slot] === d.id : !!save.decor[d.slot];
+      const changed = () => { store(); draw(); if (onChange) onChange(); };
+      const right = owned
+        ? h('button', { class: 'btn ' + (on ? '' : 'ghost'), onclick: () => { sfx('click'); save.decor[d.slot] = one ? (on ? null : d.id) : !on; changed(); } }, on ? '꾸밈 중 ✔' : '꾸미기')
+        : h('button', { class: 'btn', disabled: save.money < d.price ? true : null, onclick: () => {
+          if (save.money < d.price) return;
+          save.money -= d.price; save.owned[d.id] = true; save.decor[d.slot] = one ? d.id : true;
+          sfx('ok'); changed();
+        } }, won(d.price));
+      const desc = `📍 ${d.where}` + (one ? ' · 하나만 고를 수 있어요' : '');
+      list.append(h('div', { class: 'shop-item' + (on ? ' owned' : '') }, h('span', { class: 'sicon' }, d.icon), h('div', { class: 'sbody' }, h('b', {}, d.name), h('p', {}, desc)), right));
+    });
+  };
+  draw();
+}
+
 function showShop(after, tab = 'up') {
   leave();
   const list = h('div', { class: 'shop' });
   const moneyEl = h('b', {}, won(save.money));
   const tabs = h('div', { class: 'row center wrap' });
-  const isOne = (slot) => slot === 'floor' || slot === 'wall';
   const buy = (price, fn) => { if (save.money < price) return; save.money -= price; fn(); store(); sfx('ok'); draw(); };
   const item = (icon, name, desc, right, on) => h('div', { class: 'shop-item' + (on ? ' owned' : '') }, h('span', { class: 'sicon' }, icon), h('div', { class: 'sbody' }, h('b', {}, name), desc ? h('p', {}, desc) : null), right);
   const priceBtn = (price, fn) => h('button', { class: 'btn', disabled: save.money < price ? true : null, onclick: () => buy(price, fn) }, won(price));
@@ -230,17 +252,7 @@ function showShop(after, tab = 'up') {
       const owned = !!save.up[u.id];
       list.append(item(u.icon, u.name, u.desc, owned ? h('span', { class: 'tag' }, '보유') : priceBtn(u.price, () => { save.up[u.id] = true; }), owned));
     });
-    if (tab === 'decor') DECOR.forEach((d) => {
-      const owned = !!save.owned[d.id];
-      const on = isOne(d.slot) ? save.decor[d.slot] === d.id : !!save.decor[d.slot];
-      const toggle = h('button', { class: 'btn ' + (on ? '' : 'ghost'), onclick: () => {
-        sfx('click');
-        if (isOne(d.slot)) save.decor[d.slot] = on ? null : d.id; else save.decor[d.slot] = !on;
-        store(); draw();
-      } }, on ? '꾸밈 중 ✔' : '꾸미기');
-      list.append(item(d.icon, d.name, isOne(d.slot) ? '바닥·벽은 하나만 고를 수 있어요. 다시 누르면 기본으로 돌아가요. 벽 색은 기계 뒤 칸막이에 칠해져요.' : '',
-        owned ? toggle : priceBtn(d.price, () => { save.owned[d.id] = true; save.decor[d.slot] = isOne(d.slot) ? d.id : true; }), on));
-    });
+    if (tab === 'decor') fillDecor(list, () => { moneyEl.textContent = won(save.money); });
     if (tab === 'outfit') OUTFITS.forEach((o) => {
       const owned = !o.price || !!save.owned[o.id];
       const on = save.char === o.id;
@@ -395,6 +407,7 @@ async function playDay(n, opts = {}) {
   const comboEl = h('button', { class: 'pill combo', title: '전개도 유형 보기', onclick: () => openNetGuide() });
   const coach = h('div', { class: 'coach' });
   hud.append(...[h('button', { class: 'btn ghost small', 'aria-label': '일시정지', onclick: () => { sfx('click'); pause(); } }, '⏸'),
+    tutorial ? null : h('button', { class: 'btn ghost small', 'aria-label': '공장 꾸미기', onclick: () => { sfx('click'); openDecor(); } }, '🎨'),
     h('span', { class: 'pill day' }, tutorial ? '🎓 조작 연습' : `${n}일차`),
     tutorial ? coach : h('div', { class: 'timer' }, h('span', {}, '🚚'), timeBar, timeTxt),
     tutorial ? null : earnEl, comboEl, doneEl].filter(Boolean));
@@ -735,11 +748,13 @@ async function playDay(n, opts = {}) {
     // 특별 손님: ⚡ 급한 주문(기다리는 시간 절반, 돈 2배), ⭐ 단골 손님(실수 없이 보내면 팁)
     const r = Math.random();
     const ev = first || tutorial ? null : n >= EVENTS.urgent.from && r < EVENTS.urgent.chance ? 'urgent' : r < EVENTS.urgent.chance + EVENTS.regular.chance ? 'regular' : null;
+    // 붙이는 방식은 주문마다 섞여 나온다 (첫 주문·튜토리얼은 테이프)
+    const seal = !first && !tutorial && Math.random() < GLUE_CHANCE ? 'glue' : 'tape';
     let cust = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
     if (ev === 'regular') cust = '⭐ 단골 ' + cust;
     const base = payFor(item) + (sketch ? 300 : 0);
     const pat = ev === 'urgent' ? Math.round(cfg.patience / 2) : cfg.patience;
-    orders.push({ id: ++orderSeq, item, sketch, ev, cust, pay: ev === 'urgent' ? base * 2 : base, patience: pat, left: pat, mistakes: 0 });
+    orders.push({ id: ++orderSeq, item, sketch, seal, ev, cust, pay: ev === 'urgent' ? base * 2 : base, patience: pat, left: pat, mistakes: 0 });
     if (ev === 'urgent') say(`⚡ 급한 주문이 들어왔어요! 손님이 오래 못 기다리지만 돈을 2배로 줘요.`);
     else if (ev === 'regular') say(`⭐ 단골 손님 주문이에요! 실수 없이 보내면 팁 ${won(EVENTS.regular.tip)}을 줘요.`);
     sfx('click');
@@ -755,7 +770,7 @@ async function playDay(n, opts = {}) {
         o.el = h('button', { class: 'ticket' + (o.ev ? ' ev-' + o.ev : ''), onclick: () => pickOrder(o) },
           o.ev ? h('span', { class: 'evtag' }, o.ev === 'urgent' ? '⚡ 급한 주문 ×2' : '⭐ 단골') : null,
           h('span', { class: 'temoji' }, o.item.emoji),
-          h('span', { class: 'tbody' }, h('b', {}, o.item.name), h('small', {}, o.sketch ? '📐 겨냥도 주문' : `가로 ${o.item.d[0]} · 세로 ${o.item.d[2]} · 높이 ${o.item.d[1]}`), h('small', { class: 'pay' }, won(o.pay) + markIcons(o.item))),
+          h('span', { class: 'tbody' }, h('b', {}, o.item.name), h('small', {}, o.sketch ? '📐 겨냥도 주문' : `가로 ${o.item.d[0]} · 세로 ${o.item.d[2]} · 높이 ${o.item.d[1]}`), h('small', { class: 'seal seal-' + o.seal }, o.seal === 'glue' ? '🧴 본드 상자' : '🩹 테이프 상자'), h('small', { class: 'pay' }, won(o.pay) + markIcons(o.item))),
           h('span', { class: 'pat' }, o.bar));
       }
       if (!o.el.isConnected) tickets.append(o.el);
@@ -775,6 +790,8 @@ async function playDay(n, opts = {}) {
       o.ev === 'urgent' ? h('p', { class: 'fragile ev' }, '⚡ 급한 주문: 기다리는 시간이 절반, 돈은 2배!') : null,
       o.ev === 'regular' ? h('p', { class: 'fragile ev' }, `⭐ 단골 손님: 실수 없이 보내면 팁 ${won(EVENTS.regular.tip)}`) : null,
       o.sketch ? h('p', { class: 'fragile' }, '📐 겨냥도 주문: 길이를 보고 가로·세로·높이를 찾아요') : null,
+      o.seal === 'glue' ? h('p', { class: 'fragile seal-glue' }, '🧴 본드 상자: 접기 전에, 접으면 만나는 선분 짝을 모두 찾아 본드를 칠해요. 테이프는 안 써요.')
+        : h('p', { class: 'fragile seal-tape' }, '🩹 테이프 상자: 접은 뒤 모서리 12개에 테이프를 붙여요.'),
       (o.sketch ? sketchPicture : boxPicture)(o.item.d, 210),
       o.item.fragile ? h('p', { class: 'fragile' }, '🛡 깨지기 쉬워요! 꼭짓점 8개마다 꼭짓점 보호대') : null,
       o.item.cold ? h('p', { class: 'fragile' }, '🧊 냉장! 면 6개 모두에 보냉 은박') : null,
@@ -852,9 +869,9 @@ async function playDay(n, opts = {}) {
       oops('빨간 면이 떨어져 있어요! 전개도의 면은 길이가 같은 모서리끼리 이어져 있어야 접을 수 있어요.');
       return;
     }
-    // 맞는 전개도면 접기 전에 본드 칠하기(접었을 때 만나는 선분 잇기) 단계를 거친다
+    // 본드 상자는 맞는 전개도를 자른 뒤, 접기 전에 만나는 선분 짝을 모두 찾아 본드를 칠한다
     let glued = [];
-    if (A.valid && !A.problem && !tutorial) {
+    if (A.valid && !A.problem && active.seal === 'glue') {
       glued = await glueStage(rects, A);
       if (!active || over) return;
     }
@@ -917,7 +934,10 @@ async function playDay(n, opts = {}) {
         const e = F.edges.find((x) => [key(x.a), key(x.b)].sort().join('|') === want);
         if (e && !active.taped.has(e.id)) { active.taped.add(e.id); F.addGlue(e); k++; }
       });
-      if (k) setTimeout(() => { if (active) say(`🧴 본드를 칠해 둔 모서리 ${k}개는 접으면서 딱 붙었어요! 나머지 모서리에 테이프를 붙여요.`, 'happy'); }, 1500);
+      // 접힌 모서리(전개도에서 면과 면이 이어져 있던 곳)는 붙일 필요가 없다
+      let fold = 0;
+      F.edges.forEach((e) => { if (e.hinge && !active.taped.has(e.id)) { active.taped.add(e.id); fold++; } });
+      if (k) setTimeout(() => { if (active) say(`🧴 본드로 붙은 모서리 ${k}개 + 접힌 모서리 ${fold}개 = 모서리 ${k + fold}개가 모두 붙었어요! 테이프는 필요 없어요. 이제 스티커를 붙여요.`, 'happy'); }, 1500);
     }
     enterWork();
   }
@@ -930,11 +950,23 @@ async function playDay(n, opts = {}) {
       const glued = [];
       const color = new Map();
       const COLORS = ['#f4b942', '#6fc3df', '#a4d36b', '#f08fb5', '#b79cf0', '#f5925a', '#5fd1b0'];
-      let sel = null;
+      const total = Math.floor(segs.filter((sg) => sg.partner >= 0).length / 2);
+      let sel = null, hintSeg = null;
+      const foldBtn = h('button', { class: 'btn warn', onclick: () => { if (glued.length < total) { say(`아직 본드를 칠하지 않은 선분 짝이 ${total - glued.length}쌍 있어요. 모두 칠해야 접을 수 있어요.`); sfx('no'); return; } sfx('click'); resolve(glued); } });
+      const hintBtn = h('button', { class: 'btn ghost', onclick: () => {
+        const a = segs.find((sg) => !color.has(sg.id) && sg.partner != null && sg.id < sg.partner);
+        if (!a) return;
+        money(-GLUE_HINT, '힌트'); sfx('click');
+        sel = a; hintSeg = segs.find((x) => x.id === a.partner);
+        draw();
+        say(`💡 파란 ${nm(a)}과 점선으로 반짝이는 선분이 짝이에요. 반짝이는 선분을 눌러요.`);
+      } }, `💡 짝 하나 보기 ${won(GLUE_HINT)}`);
+      const upd = () => { foldBtn.textContent = glued.length < total ? `🧴 ${glued.length}/${total}쌍` : '접기 ▶'; foldBtn.classList.toggle('dim', glued.length < total); };
       cutWrap.innerHTML = '';
       cutWrap.append(h('div', { class: 'ctools' },
-        h('span', { class: 'ctitle' }, '🧴 본드 칠하기 · 접었을 때 만나는 두 선분을 차례로 눌러요 (안 해도 돼요)'),
-        h('button', { class: 'btn warn', onclick: () => { sfx('click'); resolve(glued); } }, '접기 ▶')));
+        h('span', { class: 'ctitle' }, `🧴 본드 상자 · 접었을 때 만나는 두 선분을 차례로 눌러 ${total}쌍을 모두 찾아요`),
+        hintBtn, foldBtn));
+      upd();
       const host = h('div', { class: 'sheet-host' });
       cutWrap.append(host);
       const NS = 'http://www.w3.org/2000/svg';
@@ -950,6 +982,7 @@ async function playDay(n, opts = {}) {
         rects.forEach((r) => svg.append(S('rect', { x: r.x, y: r.y, width: r.w, height: r.h, fill: '#fbe9cf' })));
         netLines(rects, A).fold.forEach(({ p, q }) => svg.append(S('line', { x1: p[0], y1: p[1], x2: q[0], y2: q[1], stroke: '#3b2a1e', 'stroke-width': u * 0.07, 'stroke-dasharray': `${u * 0.25} ${u * 0.2}` })));
         segs.forEach((sg) => {
+          if (hintSeg === sg && !color.has(sg.id)) svg.append(S('line', { x1: sg.a.x, y1: sg.a.y, x2: sg.b.x, y2: sg.b.y, stroke: '#2f6fde', 'stroke-width': u * 0.3, 'stroke-dasharray': `${u * 0.3} ${u * 0.2}`, 'stroke-linecap': 'round', class: 'glue-hint' }));
           const c = sel === sg ? '#2f6fde' : color.get(sg.id) || '#3b2a1e';
           const wide = color.has(sg.id) || sel === sg;
           svg.append(S('line', { x1: sg.a.x, y1: sg.a.y, x2: sg.b.x, y2: sg.b.y, stroke: c, 'stroke-width': u * (wide ? 0.34 : 0.1), 'stroke-linecap': 'round' }));
@@ -971,7 +1004,7 @@ async function playDay(n, opts = {}) {
         if (color.has(sg.id)) { say(`${nm(sg)}에는 벌써 본드를 칠했어요.`); return; }
         if (!sel) { sel = sg; sfx('click'); draw(); say(`${nm(sg)}을 골랐어요. 접었을 때 이 선분과 만나는 선분을 눌러요.`); return; }
         if (sel === sg) { sel = null; draw(); return; }
-        const a = sel; sel = null;
+        const a = sel; sel = null; hintSeg = null;
         if (a.partner === sg.id) {
           const c = COLORS[glued.length % COLORS.length];
           color.set(a.id, c); color.set(sg.id, c);
@@ -980,14 +1013,16 @@ async function playDay(n, opts = {}) {
           sfx('tape');
           // 겹치는 점도 알려 준다
           const pair = [a.a, a.b].map((p) => `점 ${p.name}은 점 ${[sg.a, sg.b].find((q) => q.k3 === p.k3).name}과`).join(', ');
-          say(`쓱싹! ${nm(a)}과 ${nm(sg)}에 본드를 칠했어요. 접으면 두 선분이 만나요. ${pair} 겹쳐요.`, 'happy');
+          upd();
+          say(glued.length < total ? `쓱싹! ${nm(a)}과 ${nm(sg)}에 본드를 칠했어요. 접으면 두 선분이 만나요. ${pair} 겹쳐요. (${glued.length}/${total}쌍)`
+            : `쓱싹! ${pair} 겹쳐요. ${total}쌍을 모두 찾았어요! 접기 ▶를 눌러요.`, 'happy');
         } else {
           oops(`${nm(a)}과 ${nm(sg)}은 접으면 서로 다른 곳에 가요. 선분 끝의 두 점이 접었을 때 각각 어느 점과 겹칠지 생각해 봐요.`, 0);
         }
         draw();
       }
       draw();
-      setSide(h('p', { class: 'hint' }, '🧴 본드를 칠해 둔 두 선분은 접을 때 맞닿으면서 딱 붙어서 테이프가 필요 없어요. 맞는 짝을 찾을수록 테이프 값과 시간을 아껴요.'),
+      setSide(h('p', { class: 'hint' }, `🧴 본드 상자는 테이프를 쓰지 않아요. 접었을 때 만나는 선분 짝 ${total}쌍에 모두 본드를 칠해야 상자가 닫혀요. 선분 끝의 두 점이 접으면 각각 어느 점과 겹칠지 생각해 봐요.`),
         h('p', { class: 'hint' }, `본드는 1cm에 ${won(COST.glue)}이에요. 접었을 때 만나는 선분은 길이가 같아요.`), invView());
       say('전개도를 접으면 어떤 선분끼리 만날까요? 만나는 두 선분에 본드를 칠해 봐요!');
     });
@@ -1065,7 +1100,7 @@ async function playDay(n, opts = {}) {
     if (!tool) { say('먼저 오른쪽에서 도구를 골라요.'); return; }
     if (tool === 'tape' && hit.type === 'edge') {
       const e = hit.edge;
-      if (o.taped.has(e.id)) { say('이 모서리는 벌써 붙였어요.'); return; }
+      if (o.taped.has(e.id)) { say(o.seal === 'glue' ? (e.hinge ? '접힌 모서리라 붙일 필요가 없어요.' : '이 모서리는 본드로 붙였어요.') : '이 모서리는 벌써 붙였어요.'); return; }
       if (!inv.tape[e.len] && inv.roll >= e.len) {
         inv.roll -= e.len;
         o.taped.add(e.id); F.addTape(e); sfx('tape');
@@ -1125,7 +1160,7 @@ async function playDay(n, opts = {}) {
     if (tutBlock('ship')) return;
     sfx('click');
     const miss = [];
-    if (o.taped.size < 12) miss.push('테이프가 안 붙은 모서리');
+    if (o.taped.size < 12) miss.push(o.seal === 'glue' ? '안 붙은 모서리' : '테이프가 안 붙은 모서리');
     if (o.item.fragile && o.guarded.size < 8) miss.push('보호대가 없는 꼭짓점');
     if (o.baseS.size < 2) miss.push('스티커가 없는 밑면');
     if (o.sideS.size < 4) miss.push('스티커가 없는 옆면');
@@ -1152,7 +1187,7 @@ async function playDay(n, opts = {}) {
     done++;
     money(pay, fast ? '빠른 배송 팁!' : o.ev === 'urgent' ? '⚡ 급한 주문 2배!' : '');
     if (o.ev === 'regular' && o.mistakes === 0) setTimeout(() => { if (!over) money(EVENTS.regular.tip, '⭐ 단골 손님 팁!'); }, 900);
-    shipLog.push({ ev: o.ev || null, t: Math.round(total - timeLeft), item: Object.keys(ITEMS).find((k) => ITEMS[k] === o.item), sketch: o.sketch ? 1 : 0, net: o.net ? o.net.id : null, mistakes: o.mistakes });
+    shipLog.push({ ev: o.ev || null, seal: o.seal, t: Math.round(total - timeLeft), item: Object.keys(ITEMS).find((k) => ITEMS[k] === o.item), sketch: o.sketch ? 1 : 0, net: o.net ? o.net.id : null, mistakes: o.mistakes });
     sfx('ok');
     let comboMsg = '';
     if (o.net) {
@@ -1344,6 +1379,23 @@ async function playDay(n, opts = {}) {
     if (timeLeft <= 0) endDay();
   }, 250);
 
+  // 🎨 공장 꾸미기: 근무 중에도 열 수 있다. 여는 동안 시간은 멈추고, 고르면 공장이 바로 바뀐다
+  function openDecor(back) {
+    if (over) return;
+    const was = paused;
+    paused = true;
+    const cash = h('b', {}, won(save.money));
+    const list = h('div', { class: 'shop decor-pop' });
+    const close = () => { ov.remove(); if (back) back(); else { paused = was; lastT = performance.now(); } };
+    fillDecor(list, () => { cash.textContent = won(save.money); F.setDecor(save.decor || {}); });
+    const ov = h('div', { class: 'overlay' }, h('div', { class: 'card decor-card' },
+      h('div', { class: 'row' }, h('h2', {}, '🎨 공장 꾸미기'), h('span', { class: 'pill' }, '💰 ', cash)),
+      h('p', { class: 'muted' }, '고르면 공장이 바로 바뀌어요. 여는 동안은 시간이 멈춰요.'),
+      list,
+      h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => { sfx('click'); close(); } }, '다 꾸몄어요'))));
+    root.append(ov);
+  }
+
   function pause() {
     if (over) return;
     paused = true;
@@ -1351,6 +1403,7 @@ async function playDay(n, opts = {}) {
       h('h2', {}, '잠깐 쉬기'),
       h('div', { class: 'col' },
         h('button', { class: 'btn', onclick: () => { sfx('click'); ov.remove(); paused = false; lastT = performance.now(); } }, '계속하기'),
+        tutorial ? null : h('button', { class: 'btn ghost', onclick: () => { sfx('click'); ov.remove(); openDecor(pause); } }, '🎨 공장 꾸미기'),
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); playDay(n, opts); } }, tutorial ? '연습 처음부터' : '오늘 처음부터'),
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showTitle(); } }, '처음 화면'),
         soundBtn()),

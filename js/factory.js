@@ -2,6 +2,7 @@
 // 상자 접기(뚜껑 열고 물건 넣기), 테이프·보호대·스티커 붙이기, 굴리기, 출고 장면을 맡는다.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { getRenderer, textSprite } from './three-view.js';
 import { makeFoldRig, boxEdges } from './net.js';
 
@@ -18,6 +19,11 @@ export const STATIONS = {
   sticker: { name: '스티커 제작기', icon: '🏷', pos: [-4.6, 2.4], rot: Math.PI / 2, stand: [-3.8, 2.4], face: -Math.PI / 2 },
   guard: { name: '포장재 선반', icon: '🛡', pos: [-3.7, 0.45], stand: [-3.6, 1.3], face: Math.PI },
 };
+
+const WALL_COL = { 'wall-mint': 0xcfe9dc, 'wall-peach': 0xf6d5c3, 'wall-sky': 0xcfe4f5 };
+const PART_COL = { 'wall-mint': 0xbfe3d0, 'wall-peach': 0xf3c9b4, 'wall-sky': 0xbcd9f0 };
+const TABLE_COL = { 'table-white': 0xf3efe6, 'table-mint': 0x8fd3bf };
+const noRay = (o) => o.traverse((m) => { m.raycast = () => {}; }); // 꾸미기는 눌러도 바닥을 누른 것처럼
 
 function canvasTex(w, h, draw) {
   const c = document.createElement('canvas');
@@ -92,6 +98,8 @@ export class Factory {
     this.walkSpeed = walkSpeed;
     this.cam = { target: new THREE.Vector3(-1, 0.9, 2), yaw: -0.15, pitch: 0.8, dist: 7.5 };
     this.goal = { target: this.cam.target.clone(), yaw: this.cam.yaw, pitch: this.cam.pitch, dist: this.cam.dist };
+    // 꾸미기 모델은 기사가 나타난 뒤에 받는다 (느린 학교 와이파이에서 근무 시작이 늦어지지 않게)
+    this._playerReady = new Promise((r) => { this._resolvePlayer = r; });
     this._buildRoom();
     this._buildDecor();
     this._buildStations();
@@ -115,20 +123,7 @@ export class Factory {
   // ---------- 방 ----------
   _buildRoom() {
     const s = this.scene;
-    const floorTex = canvasTex(256, 256, (g) => {
-      const f = this.decor.floor;
-      if (f === 'floor-wood') {
-        g.fillStyle = '#c99b6b'; g.fillRect(0, 0, 256, 256);
-        g.fillStyle = '#b98a5c'; for (let y = 0; y < 256; y += 64) g.fillRect(0, y, 256, 4);
-        g.fillRect(120, 0, 4, 64); g.fillRect(40, 64, 4, 64); g.fillRect(180, 128, 4, 64); g.fillRect(90, 192, 4, 64);
-      } else {
-        g.fillStyle = f === 'floor-blue' ? '#a9cde3' : '#a7adb3'; g.fillRect(0, 0, 256, 256);
-        g.strokeStyle = f === 'floor-blue' ? '#8fb7d0' : '#959ba1'; g.lineWidth = 3; g.strokeRect(0, 0, 256, 256);
-      }
-    });
-    floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
-    floorTex.repeat.set(12, 8);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(36, 24), new THREE.MeshLambertMaterial({ map: floorTex }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(36, 24), new THREE.MeshLambertMaterial({ map: this._floorTex() }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(3, 0, 0);
     floor.userData = { type: 'floor' };
@@ -141,7 +136,7 @@ export class Factory {
       l.rotation.x = -Math.PI / 2; l.position.set((x0 + x1) / 2, 0.005, z0);
       s.add(l);
     });
-    const wallMat = new THREE.MeshLambertMaterial({ color: { 'wall-mint': 0xcfe9dc, 'wall-peach': 0xf6d5c3 }[this.decor.wall] || 0xe9dcc6 });
+    const wallMat = this.wallMat = new THREE.MeshLambertMaterial({ color: WALL_COL[this.decor.wall] || 0xe9dcc6 });
     const back = new THREE.Mesh(new THREE.PlaneGeometry(36, 7), wallMat);
     back.position.set(3, 3.5, -4);
     s.add(back);
@@ -155,7 +150,7 @@ export class Factory {
     sign.position.set(0.5, 3.6, -3.98);
     s.add(sign);
     // 작업대
-    const wood = new THREE.MeshLambertMaterial({ color: 0xb98552 });
+    const wood = this.benchMat = new THREE.MeshLambertMaterial({ color: TABLE_COL[this.decor.table] || 0xb98552 });
     const top = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 1.2), wood);
     top.position.set(0, TABLE_Y - 0.04, 0);
     top.userData = { type: 'station', id: 'bench' };
@@ -229,17 +224,68 @@ export class Factory {
     });
   }
 
-  // 공장 꾸미기: 포스터, 전구 줄 (화분은 모델이라 _loadModels에서)
+  _floorTex() {
+    const f = this.decor.floor;
+    const t = canvasTex(256, 256, (g) => {
+      if (f === 'floor-wood') {
+        g.fillStyle = '#c99b6b'; g.fillRect(0, 0, 256, 256);
+        g.fillStyle = '#b98a5c'; for (let y = 0; y < 256; y += 64) g.fillRect(0, y, 256, 4);
+        g.fillRect(120, 0, 4, 64); g.fillRect(40, 64, 4, 64); g.fillRect(180, 128, 4, 64); g.fillRect(90, 192, 4, 64);
+      } else if (f === 'floor-check') {
+        g.fillStyle = '#f4efe4'; g.fillRect(0, 0, 256, 256);
+        g.fillStyle = '#e0a96d'; g.fillRect(0, 0, 128, 128); g.fillRect(128, 128, 128, 128);
+      } else {
+        g.fillStyle = f === 'floor-blue' ? '#a9cde3' : '#a7adb3'; g.fillRect(0, 0, 256, 256);
+        g.strokeStyle = f === 'floor-blue' ? '#8fb7d0' : '#959ba1'; g.lineWidth = 3; g.strokeRect(0, 0, 256, 256);
+      }
+    });
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(12, 8);
+    return t;
+  }
+
+  // 게임 중에 꾸미기를 바꾸면 그 자리에서 다시 꾸민다
+  setDecor(decor) {
+    this.decor = { ...decor };
+    const old = this.floor.material.map;
+    this.floor.material.map = this._floorTex(); this.floor.material.needsUpdate = true;
+    if (old) old.dispose();
+    this.wallMat.color.setHex(WALL_COL[this.decor.wall] || 0xe9dcc6);
+    this.benchMat.color.setHex(TABLE_COL[this.decor.table] || 0xb98552);
+    this._buildDecor();
+  }
+
+  _decorModel(file, x, y, z, ry = 0, scale = 1) {
+    const root = this.decorRoot;
+    this._glb = this._glb || {};
+    const p = this._glb[file] || (this._glb[file] = this._playerReady.then(() => new GLTFLoader().loadAsync(`models/${file}.glb`)));
+    return p.then((g) => {
+      if (!this.alive || root !== this.decorRoot) return null;
+      // 같은 모델을 다시 꺼낼 때는 복제해서 쓴다 (동물 친구는 뼈대가 있어 SkeletonUtils로)
+      const m = g._used ? cloneSkinned(g.scene) : g.scene;
+      g._used = true;
+      m.position.set(x, y, z); m.rotation.set(0, ry, 0); m.scale.setScalar(scale);
+      noRay(m);
+      root.add(m);
+      return { scene: m, animations: g.animations };
+    }).catch((e) => { console.warn('꾸미기 모델을 불러오지 못함', file, e); return null; });
+  }
+
+  // 공장 꾸미기: 기사가 늘 지나다니는 곳 둘레에 둔다
   _buildDecor() {
+    if (this.decorRoot) this.scene.remove(this.decorRoot);
+    if (this.pet) { this.pet.mixer.stopAllAction(); this.pet = null; }
+    const root = this.decorRoot = new THREE.Group();
+    this.scene.add(root);
+    this.bulbs = null; this.flags = null; this.balloons = null; this.clockHands = null;
     const d = this.decor;
+    const L = (c) => new THREE.MeshLambertMaterial({ color: c });
     // 기사가 오가는 기계들 바로 뒤의 칸막이 벽 (카메라에 늘 보이는 곳). 벽 꾸미기는 여기에 단다
-    const wallCol = { 'wall-mint': 0xbfe3d0, 'wall-peach': 0xf3c9b4 }[d.wall] || 0xdccfb8;
-    const part = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.3, 0.1), new THREE.MeshLambertMaterial({ color: wallCol }));
+    const part = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.3, 0.1), L(PART_COL[d.wall] || 0xdccfb8));
     part.position.set(-3.05, 1.15, -0.2);
-    this.scene.add(part);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(4.25, 0.08, 0.14), new THREE.MeshLambertMaterial({ color: 0x23706c }));
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(4.25, 0.08, 0.14), L(0x23706c));
     trim.position.set(-3.05, 2.3, -0.2);
-    this.scene.add(trim);
+    root.add(part, trim);
     if (d.poster && this.netTypes.length) {
       const tex = canvasTex(512, 320, (g) => {
         g.fillStyle = '#fffaf1'; g.fillRect(0, 0, 512, 320);
@@ -254,7 +300,20 @@ export class Factory {
       });
       const m = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.81), new THREE.MeshBasicMaterial({ map: tex }));
       m.position.set(-1.72, 1.55, -0.14); // 칸막이 벽 오른쪽 끝, 작업대 바로 옆
-      this.scene.add(m);
+      root.add(m);
+    }
+    if (d.clock) {
+      const g = new THREE.Group();
+      const face = new THREE.Mesh(new THREE.CircleGeometry(0.26, 28), new THREE.MeshBasicMaterial({ map: canvasTex(128, 128, (c) => {
+        c.fillStyle = '#fffaf1'; c.fillRect(0, 0, 128, 128);
+        c.strokeStyle = '#e07a2f'; c.lineWidth = 10; c.beginPath(); c.arc(64, 64, 58, 0, 7); c.stroke();
+        c.fillStyle = '#3b2a1e'; for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; c.fillRect(64 + Math.sin(a) * 44 - 3, 64 - Math.cos(a) * 44 - 3, 6, 6); }
+      }) }));
+      g.add(face);
+      const hand = (len, w, col, z) => { const hg = new THREE.Group(); const m = new THREE.Mesh(new THREE.PlaneGeometry(w, len), new THREE.MeshBasicMaterial({ color: col })); m.position.y = len / 2; hg.add(m); hg.position.z = z; g.add(hg); return hg; };
+      this.clockHands = [hand(0.13, 0.035, 0x3b2a1e, 0.005), hand(0.2, 0.025, 0x3b2a1e, 0.01), hand(0.21, 0.012, 0xd63b2f, 0.015)];
+      g.position.set(-4.75, 1.6, -0.14);
+      root.add(g);
     }
     if (d.lights) {
       const cols = [0xff6b6b, 0xffd93d, 0x6bcb77, 0x4d96ff, 0xc77dff];
@@ -263,9 +322,96 @@ export class Factory {
         const x = -5.0 + i * 0.15, y = 2.2 - Math.abs(Math.sin(i * 0.45)) * 0.12;
         const b = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial({ color: cols[i % cols.length] }));
         b.position.set(x, y, -0.12);
-        this.scene.add(b); this.bulbs.push(b);
+        root.add(b); this.bulbs.push(b);
       }
     }
+    if (d.bunting) {
+      // 컨베이어 위로 지나가는 삼각 깃발 줄 (기둥 두 개 사이)
+      const cols = [0xe94f4f, 0xf4b942, 0x4d96ff, 0x6bcb77, 0xc77dff];
+      const pole = L(0x5c6670);
+      [0.9, 4.1].forEach((x) => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.2, 6), pole); p.position.set(x, 1.1, -0.45); root.add(p); });
+      this.flags = [];
+      const tri = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([-0.1, 0, 0, 0.1, 0, 0, 0, -0.22, 0], 3));
+      for (let i = 0; i < 14; i++) {
+        const t = (i + 0.5) / 14, x = 0.9 + t * 3.2, y = 2.15 - Math.sin(t * Math.PI) * 0.25;
+        const f = new THREE.Mesh(tri, new THREE.MeshBasicMaterial({ color: cols[i % cols.length], side: THREE.DoubleSide }));
+        f.position.set(x, y, -0.45);
+        root.add(f); this.flags.push(f);
+      }
+    }
+    if (d.rug) {
+      const rug = new THREE.Mesh(new THREE.CircleGeometry(1.1, 40), new THREE.MeshLambertMaterial({ map: canvasTex(256, 256, (c) => {
+        const cols = ['#e94f4f', '#f4b942', '#6bcb77', '#4d96ff', '#fff6e0'];
+        for (let k = 0; k < 5; k++) { c.fillStyle = cols[k]; c.beginPath(); c.arc(128, 128, 128 - k * 24, 0, 7); c.fill(); }
+      }) }));
+      rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.008, 1.45);
+      root.add(rug);
+    }
+    if (d.balloons) {
+      this.balloons = [];
+      const cols = [0xe94f4f, 0xf4b942, 0x4d96ff, 0xc77dff];
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.16), L(0x5c6670));
+      base.position.set(-1.15, 0.04, 0.75); root.add(base);
+      cols.forEach((col, i) => {
+        const g = new THREE.Group();
+        const top = 1.55 + i * 0.13 + (i % 2) * 0.05;
+        const string = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, top, 4), new THREE.MeshBasicMaterial({ color: 0x888888 }));
+        string.position.y = top / 2; g.add(string);
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 10), new THREE.MeshPhongMaterial({ color: col, shininess: 80 }));
+        b.scale.y = 1.2; b.position.y = top + 0.15; g.add(b);
+        g.position.set(-1.15, 0.08, 0.75);
+        g.rotation.z = (i - 1.5) * 0.12; g.rotation.x = (i % 2 ? 0.08 : -0.06);
+        root.add(g); this.balloons.push(g);
+      });
+    }
+    noRay(root);
+    if (d.plants) { this._decorModel('floor-houseplant-8fad17', 1.35, 0, 0.82); this._decorModel('potted-shrub-43bd21', -4.65, 0, 3.55); }
+    if (d.arcade) this._decorModel('arcade-console-ec27c2', -0.35, 0, -1.3, 0.25, 0.8);
+    if (d.trophy) this._decorModel('trophy-cabinet-e963ac', 2.75, 0, -1.15);
+    if (d.lounge) { this._decorModel('lounge-sofa-c34b3e', 4.75, 0, 2.6, -Math.PI / 2); this._decorModel('arc-floor-lamp-fa0b5f', 4.7, 0, 3.85, -Math.PI / 2); }
+    if (d.pet === 'pet-dog' || d.pet === 'pet-cat') {
+      const pp = this.playerPos();
+      this._decorModel(d.pet === 'pet-dog' ? 'dog-base' : 'cat-base', pp.x - 0.8, 0, pp.z + 0.4, 0, d.pet === 'pet-dog' ? 0.85 : 1.4).then((g) => {
+        if (!g) return;
+        const mixer = new THREE.AnimationMixer(g.scene);
+        const act = {};
+        g.animations.forEach((c) => { act[c.name] = mixer.clipAction(c); });
+        this.pet = { obj: g.scene, mixer, act, cur: null };
+        this._petPlay('Idle');
+      });
+    }
+  }
+
+  _petPlay(name) {
+    const p = this.pet;
+    if (!p || p.cur === name || !p.act[name]) return;
+    p.act[name].reset().play();
+    if (p.cur) p.act[p.cur].crossFadeTo(p.act[name], 0.25, false);
+    p.cur = name;
+  }
+
+  // 동물 친구는 기사 뒤쪽 옆자리를 졸졸 따라간다
+  _stepPet(dt) {
+    const p = this.pet;
+    if (!p || !this.player) return;
+    const pl = this.player.position, ry = this.player.rotation.y;
+    const tx = Math.min(WALK.x1, Math.max(WALK.x0, pl.x - Math.sin(ry) * 0.7 + Math.cos(ry) * 0.5));
+    const tz = Math.min(WALK.z1 + 0.3, Math.max(WALK.z0, pl.z - Math.cos(ry) * 0.7 - Math.sin(ry) * 0.5));
+    const o = p.obj.position, dx = tx - o.x, dz = tz - o.z, d = Math.hypot(dx, dz);
+    if (d > 0.25) {
+      const sp = Math.min(this.walkSpeed * 1.3, d * 3) * dt;
+      o.x += dx / d * sp; o.z += dz / d * sp;
+      let diff = Math.atan2(dx, dz) - p.obj.rotation.y;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      p.obj.rotation.y += diff * Math.min(1, dt * 8);
+      this._petPlay(d > 1.2 ? 'Run' : 'Walk');
+    } else {
+      let diff = Math.atan2(pl.x - o.x, pl.z - o.z) - p.obj.rotation.y;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      p.obj.rotation.y += diff * Math.min(1, dt * 3);
+      this._petPlay('Idle');
+    }
+    p.mixer.update(dt);
   }
 
   async _loadModels(character) {
@@ -284,13 +430,12 @@ export class Factory {
     const st = STATIONS.bench.stand;
     const pg = await put(who, st[0], 0, st[1], Math.PI);
     if (pg) this._setupPlayer(pg);
+    this._resolvePlayer();
     const tg = await put('delivery-truck-a9537e', BELT_END + 3.2, 0, 0.2, Math.PI / 2);
     if (tg) { this.truck = tg.scene; this.truckHome = this.truck.position.clone(); this._makeDoor(); }
     put('rooted-gantry-arm-f35c8f', -1.6, 0, -2.4, 0.5);
     put('timber-eur-pallet-a1f655', 2.0, 0, -2.6);
     put('material-pallet-6af263', 3.5, 0, -2.7, 0.3);
-    // 화분: 작업대 옆과 스티커 제작기 옆 (늘 지나다니는 곳)
-    if (this.decor.plants) { put('floor-houseplant-8fad17', 1.35, 0, 0.82); put('potted-shrub-43bd21', -4.65, 0, 3.55); }
   }
 
   // ---------- 일꾼 ----------
@@ -439,6 +584,13 @@ export class Factory {
     this.camera.lookAt(c.target);
     if (this.beltMoving) this.beltTex.offset.x -= dt * 1.6;
     if (this.bulbs) { const tt = now / 400; this.bulbs.forEach((b, i) => { b.visible = Math.sin(tt + i * 1.7) > -0.6; }); }
+    if (this.flags) { const tt = now / 300; this.flags.forEach((f, i) => { f.rotation.x = Math.sin(tt + i * 0.8) * 0.35; }); }
+    if (this.balloons) { const tt = now / 900; this.balloons.forEach((b, i) => { b.rotation.z = (i - 1.5) * 0.12 + Math.sin(tt + i * 1.3) * 0.05; }); }
+    if (this.clockHands) {
+      const dd = new Date(), sec = dd.getSeconds(), mi = dd.getMinutes() + sec / 60, hr = (dd.getHours() % 12) + mi / 60;
+      [hr / 12, mi / 60, sec / 60].forEach((v, k) => { this.clockHands[k].rotation.z = -v * Math.PI * 2; });
+    }
+    this._stepPet(dt);
     this.renderer.render(this.scene, this.camera);
   }
 

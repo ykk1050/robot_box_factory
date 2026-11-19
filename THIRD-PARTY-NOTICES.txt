@@ -16,6 +16,13 @@ Delivery Courier by Polyfork (https://polyfork.dev/asset/delivery-courier-327e30
 Station Master by Polyfork (https://polyfork.dev/asset/station-master-1d6a0a), CC BY 4.0
 Potted Shrub by Polyfork (https://polyfork.dev/asset/potted-shrub-43bd21), CC BY 4.0
 Floor Houseplant by Polyfork (https://polyfork.dev/asset/floor-houseplant-8fad17), CC BY 4.0
+Dog by Polyfork (https://polyfork.dev/asset/dog-base), CC BY 4.0
+Cat by Polyfork (https://polyfork.dev/asset/cat-base), CC BY 4.0
+Arcade Console by Polyfork (https://polyfork.dev/asset/arcade-console-ec27c2), CC BY 4.0
+Trophy Cabinet by Polyfork (https://polyfork.dev/asset/trophy-cabinet-e963ac), CC BY 4.0
+Lounge Sofa by Polyfork (https://polyfork.dev/asset/lounge-sofa-c34b3e), CC BY 4.0
+Arc Floor Lamp by Polyfork (https://polyfork.dev/asset/arc-floor-lamp-fa0b5f), CC BY 4.0
+(고양이 친구는 크기를 1.4배, 강아지 친구는 0.85배, 오락기는 0.8배로 줄이거나 늘려 씀)
 바꾼 것: 모델 파일(models/*.glb)은 그대로 쓰고, 일꾼의 걷기 동작은 제자리에서 걷도록 엉덩이 앞뒤 이동만 없애서 쓰며, 로봇 팔은 Blender로 투명 배경 그림(img/robot.webp)으로도 렌더링해서 사용했습니다.
 라이선스: https://creativecommons.org/licenses/by/4.0/
 이 게임은 Polyfork가 만들거나 추천한 것이 아닙니다.

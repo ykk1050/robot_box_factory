@@ -322,3 +322,27 @@ button { font: inherit; color: inherit; }
 .nword.sel { border-color: var(--teal); background: var(--teal); color: #fff; }
 .nick-mine { gap: 6px; margin: 4px 0; }
 @media (max-width: 520px) { .nick-steps { grid-template-columns: repeat(2, 1fr); } .nick-grid { max-height: 34dvh; } }
+
+/* 붙이는 방식 표시 (테이프 상자 / 본드 상자) */
+.ticket .seal { font-weight: bold; }
+.seal-glue { color: #8a5a00; }
+.seal-tape { color: #1f6f6a; }
+.btn.dim { opacity: 0.55; }
+.glue-hint { animation: gluehint 0.8s ease-in-out infinite alternate; }
+@keyframes gluehint { from { opacity: 0.25; } to { opacity: 1; } }
+
+/* 게임 중 🎨 공장 꾸미기 창 */
+.decor-card { max-width: 760px; width: calc(100% - 32px); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; }
+.decor-card .row { justify-content: space-between; gap: 8px; }
+.decor-pop { overflow-y: auto; flex: 1; min-height: 0; margin: 6px 0; -webkit-overflow-scrolling: touch; }
+.decor-pop .shop-item { padding: 8px 12px; }
+.decor-pop .sicon { font-size: 30px; }
+@media (max-width: 560px) {
+  .decor-card { padding: 12px; }
+  .decor-card h2 { font-size: 20px; white-space: nowrap; }
+  .decor-pop .shop-item { gap: 8px; padding: 6px 8px; }
+  .decor-pop .sicon { font-size: 24px; }
+  .decor-pop .sbody b { font-size: 17px; }
+  .decor-pop .sbody p { font-size: 12px; }
+  .decor-pop .btn { padding: 8px 10px; font-size: 15px; min-height: 44px; }
+}

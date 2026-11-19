@@ -31,6 +31,9 @@ export const CUSTOMERS = ['🐰 토끼 문구점', '🐻 곰돌이 마트', '�
 // roll: 테이프 롤(총 길이로 뽑기) 1cm, glue: 본드 1cm
 export const COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, glue: 5 };
 // 특별 손님: 급한 주문(기다리는 시간 절반, 돈 2배), 단골 손님(실수 없이 보내면 팁)
+// 붙이는 방식: 🩹 테이프 상자(접은 뒤 모서리 12개에 테이프) / 🧴 본드 상자(접기 전 만나는 선분 짝을 모두 찾아 본드)
+export const GLUE_CHANCE = 0.4;
+export const GLUE_HINT = 100;
 export const EVENTS = { urgent: { chance: 0.15, from: 2 }, regular: { chance: 0.12, from: 1, tip: 500 } };
 
 // 가방: 테이프 1줄, 스티커 1장, 보호대 1개, 은박 1장이 각각 한 칸
@@ -82,12 +85,28 @@ export const OUTFITS = [
 ];
 
 // 공장 꾸미기: slot이 같은 것(바닥, 벽)은 하나만 고른다
+// slot이 같은 것이 여러 개면 그중 하나만 고른다(바닥·벽·작업대·동물 친구). 나머지는 켜고 끄기.
+// where: 공장 어디에 생기는지 (상점에서 알려 준다)
 export const DECOR = [
-  { id: 'floor-blue', slot: 'floor', name: '하늘 타일 바닥', icon: '🟦', price: 1500 },
-  { id: 'floor-wood', slot: 'floor', name: '나무 마루 바닥', icon: '🟫', price: 2500 },
-  { id: 'wall-mint', slot: 'wall', name: '민트색 벽', icon: '🟩', price: 1000 },
-  { id: 'wall-peach', slot: 'wall', name: '복숭아색 벽', icon: '🟧', price: 1000 },
-  { id: 'poster', slot: 'poster', name: '전개도 11가지 포스터', icon: '🖼️', price: 1200 },
-  { id: 'plants', slot: 'plants', name: '화분 두 개', icon: '🌱', price: 1500 },
-  { id: 'lights', slot: 'lights', name: '반짝 전구 줄', icon: '💡', price: 2000 },
+  { id: 'floor-blue', slot: 'floor', name: '하늘 타일 바닥', icon: '🟦', price: 1500, where: '공장 바닥 전체' },
+  { id: 'floor-wood', slot: 'floor', name: '나무 마루 바닥', icon: '🟫', price: 2500, where: '공장 바닥 전체' },
+  { id: 'floor-check', slot: 'floor', name: '체크무늬 바닥', icon: '🏁', price: 2000, where: '공장 바닥 전체' },
+  { id: 'wall-mint', slot: 'wall', name: '민트색 벽', icon: '🟩', price: 1000, where: '기계 뒤 칸막이와 공장 벽' },
+  { id: 'wall-peach', slot: 'wall', name: '복숭아색 벽', icon: '🟧', price: 1000, where: '기계 뒤 칸막이와 공장 벽' },
+  { id: 'wall-sky', slot: 'wall', name: '하늘색 벽', icon: '🔷', price: 1000, where: '기계 뒤 칸막이와 공장 벽' },
+  { id: 'table-white', slot: 'table', name: '하얀 작업대', icon: '⬜', price: 1200, where: '상자를 접고 붙이는 작업대' },
+  { id: 'table-mint', slot: 'table', name: '민트 작업대', icon: '🟢', price: 1200, where: '상자를 접고 붙이는 작업대' },
+  { id: 'rug', slot: 'rug', name: '알록달록 둥근 깔개', icon: '🔴', price: 1500, where: '작업대 앞 바닥' },
+  { id: 'balloons', slot: 'balloons', name: '풍선 다발', icon: '🎈', price: 1500, where: '작업대 왼쪽' },
+  { id: 'poster', slot: 'poster', name: '전개도 11가지 포스터', icon: '🖼️', price: 1200, where: '칸막이 벽 오른쪽' },
+  { id: 'clock', slot: 'clock', name: '똑딱 벽시계', icon: '🕰️', price: 1000, where: '칸막이 벽 왼쪽' },
+  { id: 'lights', slot: 'lights', name: '반짝 전구 줄', icon: '💡', price: 2000, where: '칸막이 벽 위' },
+  { id: 'bunting', slot: 'bunting', name: '삼각 깃발 줄', icon: '🚩', price: 1200, where: '컨베이어 위' },
+  { id: 'plants', slot: 'plants', name: '화분 두 개', icon: '🌱', price: 1500, where: '작업대 옆, 스티커 제작기 옆' },
+  { id: 'arcade', slot: 'arcade', name: '오락기', icon: '🕹️', price: 3000, where: '작업대 뒤' },
+  { id: 'trophy', slot: 'trophy', name: '트로피 진열장', icon: '🏆', price: 2500, where: '컨베이어 뒤' },
+  { id: 'lounge', slot: 'lounge', name: '쉼터 소파와 스탠드', icon: '🛋️', price: 3000, where: '공장 오른쪽 끝' },
+  { id: 'pet-dog', slot: 'pet', name: '강아지 친구', icon: '🐕', price: 4000, where: '기사를 졸졸 따라다녀요' },
+  { id: 'pet-cat', slot: 'pet', name: '고양이 친구', icon: '🐈', price: 4000, where: '기사를 졸졸 따라다녀요' },
 ];
+export const DECOR_ONE = new Set(DECOR.map((d) => d.slot).filter((sl, i, a) => a.indexOf(sl) !== i));

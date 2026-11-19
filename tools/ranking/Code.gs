@@ -100,8 +100,10 @@ function payFor(it) {
 }
 function minMaterial(it) {
   var a = it.d[0], b = it.d[1], c = it.d[2];
-  // 테이프: 접힌 모서리 5곳은 꼭 테이프(가장 싼 롤 값), 잘린 모서리 7곳은 스테이플러로 대신할 수 있다
-  var tapeMin = 5 * Math.min(a, b, c) * Math.min(COST.tape, COST.roll || COST.tape);
+  // 붙이기: 🩹 테이프 상자는 모서리 12곳에 테이프, 🧴 본드 상자는 잘린 모서리 7곳에 본드(접힌 모서리 5곳은 그냥 접힘).
+  // 어느 쪽인지는 게임이 정하므로 둘 중 싼 쪽을 최소로 본다
+  var m = Math.min(a, b, c);
+  var tapeMin = Math.min(12 * m * Math.min(COST.tape, COST.roll || COST.tape), 7 * m * (COST.glue || 0));
   return tapeMin + 6 * COST.sticker + (it.fragile ? 8 * COST.guard : 0) + (it.cold ? 6 * COST.foil : 0) + (it.up ? 4 * COST.sticker : 0);
 }
 function maxOrders(cfg) { return 1 + Math.floor((cfg.time + TRUCK_PLUS - 42) / cfg.every); }
