@@ -1,9 +1,9 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
 import { ITEMS, CUSTOMERS, COST, BAG, dayConfig, UPGRADES, payFor } from './data.js';
-import { RANK_URL, TEST, rankOn, CATS, call } from './rank.js';
+import { RANK_URL, RANK_ALL, TEST, rankOn, CATS, call } from './rank.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.024';
+export const VERSION = window.BUILD || 'v1.025';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -36,6 +36,7 @@ const SAVE_KEY = 'robot-box-factory-v2';
 let save = { day: 1, money: 0, up: {}, dies: {}, best: {}, sound: true, char: 'm', nets: {}, tutorialDone: false };
 try { save = { ...save, ...JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') }; } catch (_) { /* 무시 */ }
 if (save.up.helper) { delete save.up.helper; save.money += 6000; } // 없어진 업그레이드는 돈으로 돌려준다
+if (save.rank && save.rank.cls !== '전체') delete save.rank; // 반별 랭킹을 없애서, 예전 이름표는 다시 참가해야 한다
 function store() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (_) { /* 무시 */ } }
 
 // ---------- 소리 ----------
@@ -118,21 +119,19 @@ function showTitle() {
 // ---------- 반 랭킹 ----------
 function profileDialog(after) {
   const r = save.rank || {};
-  const cls = h('input', { class: 'tin', value: r.cls || '', maxlength: 12, placeholder: '예: 5-2' });
   const nick = h('input', { class: 'tin', value: r.nick || '', maxlength: 10, placeholder: '예: 상자왕' });
   const pin = h('input', { class: 'tin', value: r.pin || '', maxlength: 4, inputmode: 'numeric', pattern: '[0-9]*', placeholder: '숫자 4자리' });
   const msg = h('p', { class: 'hint' }, '실제 이름 대신 별명을 써요. 비밀번호는 다른 친구가 내 별명으로 점수를 올리지 못하게 막아 줘요.');
   const ov = h('div', { class: 'overlay' }, h('div', { class: 'card' },
     h('h2', {}, '🏆 랭킹 참가하기'),
-    h('label', { class: 'field' }, '반 코드', cls),
     h('label', { class: 'field' }, '별명 (2~10글자)', nick),
     h('label', { class: 'field' }, '비밀번호', pin),
     msg,
     h('div', { class: 'row end' },
       h('button', { class: 'btn ghost', onclick: () => { sfx('click'); ov.remove(); } }, '닫기'),
       h('button', { class: 'btn', onclick: async (e) => {
-        const q = { cls: cls.value.trim(), nick: nick.value.trim(), pin: pin.value.trim() };
-        if (!q.cls || q.nick.length < 2 || !/^\d{4}$/.test(q.pin)) { msg.textContent = '반 코드, 별명(2글자 이상), 숫자 4자리 비밀번호를 모두 넣어요.'; return; }
+        const q = { cls: RANK_ALL, nick: nick.value.trim(), pin: pin.value.trim() };
+        if (q.nick.length < 2 || !/^\d{4}$/.test(q.pin)) { msg.textContent = '별명(2글자 이상)과 숫자 4자리 비밀번호를 넣어요.'; return; }
         const btn = e.currentTarget; // 기다린 뒤에는 e.currentTarget이 비므로 미리 잡아 둔다
         btn.disabled = true;
         msg.textContent = '확인하는 중…';
@@ -153,14 +152,14 @@ async function showRanking(cat = 'day', day = save.day > 1 ? save.day - 1 : 1) {
   const days = cat !== 'day' ? null : h('div', { class: 'row center wrap' },
     ...Array.from({ length: Math.max(save.day, 6) }, (_, i) => i + 1).map((d) => h('button', { class: 'chip small' + (d === day ? ' now' : ''), onclick: () => { sfx('click'); showRanking('day', d); } }, `${d}일차`)));
   const me = save.rank;
-  const prof = h('p', { class: 'center' }, me ? `내 이름표: ${me.cls}반 · ${me.nick} ` : '아직 랭킹에 참가하지 않았어요. ',
+  const prof = h('p', { class: 'center' }, me ? `내 별명: ${me.nick} ` : '아직 랭킹에 참가하지 않았어요. ',
     h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); profileDialog(() => showRanking(cat, day)); } }, me ? '바꾸기' : '참가하기'));
   app.append(h('div', { class: 'screen shop-screen' },
-    h('div', { class: 'topline' }, h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showTitle(); } }, '← 돌아가기'), h('h2', {}, '🏆 우리 반 랭킹'), h('span')),
+    h('div', { class: 'topline' }, h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showTitle(); } }, '← 돌아가기'), h('h2', {}, '🏆 전체 랭킹'), h('span')),
     RANK_URL ? null : h('p', { class: 'center hint' }, '선생님이 랭킹을 아직 연결하지 않았어요.'),
     prof, tabs, days, list, creditLine()));
   if (!RANK_URL) return;
-  if (!me) { list.append(h('p', { class: 'center muted' }, '참가하면 우리 반 순위를 볼 수 있어요.')); return; }
+  if (!me) { list.append(h('p', { class: 'center muted' }, '참가하면 순위를 볼 수 있어요.')); return; }
   list.append(h('p', { class: 'center muted' }, '불러오는 중…'));
   const res = await call({ act: 'top', cls: me.cls, nick: me.nick, cat, day });
   if (!list.isConnected) return;
@@ -1175,11 +1174,11 @@ async function playDay(n, opts = {}) {
     store();
     sfx(pass ? 'clear' : 'no');
     // 랭킹에 올리기: 점수 대신 출고 기록을 보내고, 서버가 다시 계산해서 순위를 알려 준다
-    const rankLi = !tutorial && rankOn() ? h('li', { class: 'rankline' }, save.rank ? '🏆 랭킹에 올리는 중…' : '🏆 시작 화면의 🏆 랭킹에서 참가하면 우리 반 순위에 올라가요.') : null;
+    const rankLi = !tutorial && rankOn() ? h('li', { class: 'rankline' }, save.rank ? '🏆 랭킹에 올리는 중…' : '🏆 시작 화면의 🏆 랭킹에서 참가하면 랭킹에 올라가요.') : null;
     if (rankLi && save.rank) {
       if (!rankToken) rankLi.textContent = '🏆 ' + (rankStartMsg || '랭킹 서버와 연결이 안 돼서 이번 기록은 올라가지 않아요.');
       else call({ act: 'submit', ...save.rank, day: n, token: rankToken, log: shipLog, earned }).then((r) => {
-        rankLi.textContent = r.ok ? `🏆 ${n}일차 매출 우리 반 ${r.myRank}위! (완벽한 상자 ${r.perfect}개 · 최고 콤보 ${r.bestCombo})` : `🏆 ${r.msg}`;
+        rankLi.textContent = r.ok ? `🏆 ${n}일차 매출 전체 ${r.myRank}위! (완벽한 상자 ${r.perfect}개 · 최고 콤보 ${r.bestCombo})` : `🏆 ${r.msg}`;
       });
     }
     const left = bagUsed();

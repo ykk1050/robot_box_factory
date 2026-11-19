@@ -56,6 +56,7 @@
 ## 반 랭킹
 
 - 선생님 구글 시트(Apps Script 웹 앱)에 모은다. 연결 방법: `tools/ranking/연결방법.md`
+- 반 구분 없는 전체 랭킹 하나(별명 + 4자리 비밀번호로 참가, 서버의 반 칸은 늘 `전체`)
 - 랭킹: 일차별 매출, 최고 콤보, 완벽한 상자(누적), 전개도 수집(11가지 중), 최고 도달 일차
 - 점수 조작 방지: 일회용 근무표 + 출고 기록을 서버(`tools/ranking/Code.gs`)가 다시 계산·검사, 별명 비밀번호, `window.__game`은 `?test=1`에서만
 - `js/data.js`를 바꾸면 `python tools/ranking/sync.py`로 서버 표를 맞추고 Apps Script를 새 버전으로 배포
