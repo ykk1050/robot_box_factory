@@ -306,13 +306,5 @@ button { font: inherit; color: inherit; }
 .snum.big { font-size: 30px; min-width: 96px; }
 .srow.center { justify-content: center; }
 
-/* 쉬는 시간: 도장 큐브 */
-.cube-screen { align-items: center; }
-.cube-board { width: min(640px, 100%); margin: 6px auto; touch-action: none; }
-.cube-svg { width: 100%; height: auto; display: block; touch-action: none; background: #f6ecda; border-radius: 16px; border: 2px solid var(--line); }
-.cube-legend { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; font-family: "Jua", sans-serif; font-size: 18px; }
-.cube-ctrl { gap: 24px; margin-top: 6px; }
-.rollpad.cube-pad { position: static; }
-.cube-pad .rmid { color: var(--muted); text-shadow: none; }
 .hint.bad { color: var(--red); }
 .hint.good { color: var(--green); font-family: "Jua", sans-serif; font-size: 18px; }

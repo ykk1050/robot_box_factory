@@ -3,7 +3,7 @@ import { ITEMS, CUSTOMERS, COST, BAG, EVENTS, OUTFITS, DECOR, dayConfig, UPGRADE
 import { RANK_URL, RANK_ALL, TEST, rankOn, CATS, call } from './rank.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.026';
+export const VERSION = window.BUILD || 'v1.027';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, netBoundary, netLines, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -33,7 +33,7 @@ const comboBonus = (len) => Math.min(COMBO_MAX, Math.max(0, len - 1) * COMBO_STE
 
 // ---------- 저장 ----------
 const SAVE_KEY = 'robot-box-factory-v2';
-let save = { day: 1, money: 0, up: {}, dies: {}, best: {}, sound: true, char: 'm', nets: {}, tutorialDone: false, owned: {}, decor: {}, cube: {} };
+let save = { day: 1, money: 0, up: {}, dies: {}, best: {}, sound: true, char: 'm', nets: {}, tutorialDone: false, owned: {}, decor: {} };
 try { save = { ...save, ...JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') }; } catch (_) { /* 무시 */ }
 if (save.up.helper) { delete save.up.helper; save.money += 6000; } // 없어진 업그레이드는 돈으로 돌려준다
 if (save.rank && save.rank.cls !== '전체') delete save.rank; // 반별 랭킹을 없애서, 예전 이름표는 다시 참가해야 한다
@@ -109,8 +109,7 @@ function showTitle() {
         h('button', { class: 'btn big ghost', onclick: () => { sfx('click'); showRanking(); } }, '🏆 랭킹')),
       h('div', { class: 'row center wrap', style: 'margin-top:10px' },
         h('button', { class: 'btn ghost' + (save.tutorialDone ? '' : ' tut-glow'), onclick: () => { sfx('click'); playDay(1, { tutorial: true }); } }, '🎓 조작 연습'),
-        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); loadWork().then(() => showNetGuide()).catch(() => {}); } }, '📐 전개도 유형 11가지'),
-        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showStampCube(); } }, '🎲 도장 큐브')),
+        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); loadWork().then(() => showNetGuide()).catch(() => {}); } }, '📐 전개도 유형 11가지')),
       h('p', { class: 'muted', style: 'margin:10px 0 4px' }, `모은 돈 ${won(save.money)}`),
       save.day > 1 ? chips : null),
     creditLine()));
@@ -214,21 +213,6 @@ function showShop(after, tab = 'up') {
     h('div', { class: 'topline' }, h('button', { class: 'btn ghost', onclick: () => { sfx('click'); (after || showTitle)(); } }, '← 돌아가기'), h('h2', {}, '🛒 공장 상점'), h('span', { class: 'pill' }, '💰 ', moneyEl)),
     h('p', { class: 'muted center' }, '택배로 번 돈으로 공장을 업그레이드하고 꾸며요.'),
     tabs, list, creditLine()));
-}
-
-// ---------- 쉬는 시간: 도장 큐브 ----------
-async function showStampCube(after) {
-  leave();
-  app.append(h('div', { class: 'screen title' }, h('p', { class: 'lead' }, '도장 큐브를 꺼내는 중…')));
-  const ok = await Promise.race([loadWork().then(() => true), new Promise((r) => setTimeout(() => r(false), 20000))]).catch(() => false);
-  app.innerHTML = '';
-  if (!ok) { app.append(h('div', { class: 'screen title' }, h('div', { class: 'card' }, h('p', {}, '불러오지 못했어요. 인터넷 연결을 확인해 주세요.'), h('button', { class: 'btn', onclick: () => location.reload() }, '다시 열기')))); return; }
-  const { stampCube } = await import('./stampcube.js');
-  cleanup = stampCube(app, {
-    h, sfx, types: NET_TYPES, cleared: save.cube || {},
-    onReward: (m, id) => { save.money += m; save.cube = { ...(save.cube || {}), [id]: true }; store(); },
-    onExit: () => (after || showTitle)(),
-  });
 }
 
 // ---------- 하루 시작 ----------
@@ -1371,7 +1355,6 @@ async function playDay(n, opts = {}) {
       h('div', { class: 'row end wrap' },
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); playDay(n); } }, '다시 하기'),
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showShop(showTitle); } }, '🛒 상점'),
-        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showStampCube(showTitle); } }, '🎲 쉬는 시간'),
         pass ? h('button', { class: 'btn', onclick: () => { sfx('click'); showTitle(); showIntro(n + 1); } }, `${n + 1}일차로 ▶`) : null))));
   }
 
