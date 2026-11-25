@@ -4,17 +4,32 @@ import { RANK_URL, RANK_ALL, TEST, rankOn, CATS, call } from './rank.js';
 import { NICK, NICK_WORDS, NICK_STEPS } from './nickwords.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.030';
+export const VERSION = window.BUILD || 'v1.031';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, netBoundary, netLines, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
 // 학교 와이파이에서 파일 하나가 잠깐 끊겨도 멈추지 않게, 실패하면 잠깐 쉬었다가 3번까지 다시 받는다
+// import()는 응답 없이 멈추면 끊을 수 없으므로, 먼저 fetch로 받아 두고(8초 넘게 걸리면 끊고 다시) 그다음에 import한다
+const WORK_FILES = [...['factory', 'net', 'cutter', 'nettype', 'three-view'].map((f) => `js/${f}.js?v=${VERSION}`),
+  'vendor/three.module.js', 'vendor/three.core.js', 'vendor/addons/loaders/GLTFLoader.js', 'vendor/addons/utils/BufferGeometryUtils.js', 'vendor/addons/utils/SkeletonUtils.js'];
+async function warm(url) {
+  for (let i = 0; i < 5; i++) {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 8000 + i * 4000);
+    try {
+      const r = await fetch(url, { signal: ac.signal });
+      if (r.ok) { await r.text(); return; }
+    } catch (_) { /* 다시 받는다 */ } finally { clearTimeout(t); }
+    await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+  }
+}
 let workPromise = null;
 const loadWork = () => {
   if (workPromise) return workPromise;
   workPromise = (async () => {
     for (let i = 0; ; i++) {
       try {
+        await Promise.all(WORK_FILES.map(warm));
         const [f, n, c, t] = await Promise.all([import('./factory.js'), import('./net.js'), import('./cutter.js'), import('./nettype.js')]);
         analyzeNet = n.analyzeNet; netBoundary = n.netBoundary; netLines = n.netLines; Cutter = c.Cutter; boxPicture = c.boxPicture; sketchPicture = c.sketchPicture; STATIONS = f.STATIONS;
         classifyNet = t.classifyNet; NET_TYPES = t.NET_TYPES; NET_GROUPS = t.NET_GROUPS; netTypePicture = t.netTypePicture;
@@ -332,8 +347,8 @@ async function playDay(n, opts = {}) {
   const tutorial = !!opts.tutorial;
   leave();
   app.append(h('div', { class: 'screen title' }, h('p', { class: 'lead' }, '공장 문을 여는 중…')));
-  // 파일이 끊기지도 않고 멈추면(약한 와이파이) 20초 뒤 '다시 열기'를 보여 준다
-  const Factory = await Promise.race([loadWork(), new Promise((r) => setTimeout(() => r(null), 20000))]).catch(() => null);
+  // 파일이 끊기지도 않고 멈추면(약한 와이파이) 45초 뒤 '다시 열기'를 보여 준다
+  const Factory = await Promise.race([loadWork(), new Promise((r) => setTimeout(() => r(null), 45000))]).catch(() => null);
   app.innerHTML = '';
   if (!Factory) { app.append(h('div', { class: 'screen title' }, h('div', { class: 'card' }, h('p', {}, '공장을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.'), h('button', { class: 'btn', onclick: () => location.reload() }, '다시 열기')))); return; }
   const cfg = dayConfig(n);
@@ -1466,5 +1481,6 @@ async function playDay(n, opts = {}) {
 }
 
 if (TEST) window.__factory = { save, showTitle, playDay, showShop }; // F12에서 게임을 조작하지 못하게, 점검 봇(?test=1)에서만 연다
+try { sessionStorage.removeItem('rbf-reload'); } catch (_) { /* 무시 */ }
 showTitle();
 setTimeout(() => loadWork().catch(() => {}), 600);

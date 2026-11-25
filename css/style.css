@@ -57,7 +57,9 @@ button { font: inherit; color: inherit; }
 .credit-line a { color: var(--muted); display: inline-block; padding: 10px 4px; }
 
 /* 시작 화면 */
-.title { align-items: center; justify-content: center; padding: 16px; }
+/* 가운데 두되, 화면보다 길면 위가 잘리지 않고 스크롤되게 (justify-content: center는 위가 잘린다) */
+.title { align-items: center; justify-content: flex-start; padding: 16px; }
+.title::before, .title::after { content: ''; margin: auto; }
 .title-box { text-align: center; max-width: 600px; }
 .title h1 { font-size: clamp(40px, 8vw, 64px); margin: 4px 0; color: var(--teal-d); text-shadow: 0 3px 0 #fff; }
 .kicker { color: var(--orange); margin: 0; font-size: 18px; }
@@ -345,4 +347,25 @@ button { font: inherit; color: inherit; }
   .decor-pop .sbody b { font-size: 17px; }
   .decor-pop .sbody p { font-size: 12px; }
   .decor-pop .btn { padding: 8px 10px; font-size: 15px; min-height: 44px; }
+}
+
+/* 갤럭시 탭 가로(약 1280×720)처럼 높이가 낮은 화면: 시작 화면이 한 화면에 다 들어오게 */
+@media (max-height: 820px) and (min-width: 700px) {
+  .title { padding: 8px 16px; }
+  .title .hero { width: min(150px, 13.5vh); margin-bottom: 4px; }
+  .title h1 { font-size: 52px; margin: 0; }
+  .title .lead { margin: 6px 0; }
+  .title .kicker { margin: 0; }
+}
+
+/* 휴대폰 세로: 주문서를 짧게 해서 상자가 보이게 */
+@media (max-width: 520px) {
+  .leftcol { top: 146px; max-height: 24%; }
+  .orderpin { padding: 4px 8px; }
+  .orderpin .fragile { font-size: 12px; line-height: 1.25; margin: 1px 0; }
+  .orderpin svg { width: 84px; }
+  .orderpin .temoji.big { font-size: 24px; }
+  .orderpin .seal-tape, .orderpin .seal-glue { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 62vw; }
+  .play:not(.cutting) .tickets .ticket.empty { display: none; }
+  .rollpad { bottom: calc(30% + 152px); }
 }

@@ -11,7 +11,7 @@
   <link rel="icon" href="data:,">
   <script>
     // 게임 버전: 고칠 때마다 여기 하나만 +0.001 (화면 아래 제작자 줄에도 이 값이 나온다)
-    window.BUILD = 'v1.030';
+    window.BUILD = 'v1.031';
     // 모든 파일 주소에 버전을 붙여, 패드에 예전 파일이 남아 있어도 새 버전 파일을 함께 받게 한다
     (function () {
       var q = '?v=' + window.BUILD;
@@ -31,6 +31,18 @@
         var s = document.createElement('script');
         s.type = 'module';
         s.src = 'js/main.js' + q;
+        // 게임 파일을 못 받으면 3번까지 저절로 다시 열고, 그래도 안 되면 빈 화면 대신 '다시 열기'를 보여 준다
+        s.onerror = fail;
+        var started = setTimeout(function () { if (!document.getElementById('app').firstChild) fail(); }, 15000);
+        function fail() {
+          clearTimeout(started);
+          try {
+            var n = +(sessionStorage.getItem('rbf-reload') || 0);
+            if (n < 3) { sessionStorage.setItem('rbf-reload', n + 1); setTimeout(function () { location.reload(); }, 800 * (n + 1)); return; }
+            sessionStorage.removeItem('rbf-reload');
+          } catch (e) { /* 저장이 막혀 있으면 안내만 보여 준다 */ }
+          document.getElementById('app').innerHTML = '<div style="padding:60px 20px;text-align:center;font-size:20px">게임을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.<br><br><button style="font-size:22px;padding:14px 28px" onclick="location.reload()">다시 열기</button></div>';
+        };
         document.body.appendChild(s);
       });
     })();

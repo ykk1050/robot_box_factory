@@ -25,6 +25,24 @@ const PART_COL = { 'wall-mint': 0xbfe3d0, 'wall-peach': 0xf3c9b4, 'wall-sky': 0x
 const TABLE_COL = { 'table-white': 0xf3efe6, 'table-mint': 0x8fd3bf };
 const noRay = (o) => o.traverse((m) => { m.raycast = () => {}; }); // 꾸미기는 눌러도 바닥을 누른 것처럼
 
+// 모델 받기: 학교 와이파이에서 잠깐 끊기거나 멈춰도 쉬었다가 다시 받는다(모두 5번)
+async function loadGLB(file, alive = () => true) {
+  for (let i = 0; ; i++) {
+    let timer;
+    try {
+      return await Promise.race([
+        // three.js는 같은 주소를 받는 중이면 거기에 붙으므로, 다시 받을 때는 주소를 다르게 한다
+        new GLTFLoader().loadAsync(`models/${file}.glb${i ? `?r=${i}` : ''}`),
+        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('시간 초과')), 25000); }),
+      ]);
+    } catch (e) {
+      if (i >= 4 || !alive()) throw e;
+      await new Promise((r) => setTimeout(r, Math.min(6000, 600 * 2 ** i)));
+      if (!alive()) throw e;
+    } finally { clearTimeout(timer); }
+  }
+}
+
 function canvasTex(w, h, draw) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -258,7 +276,8 @@ export class Factory {
   _decorModel(file, x, y, z, ry = 0, scale = 1) {
     const root = this.decorRoot;
     this._glb = this._glb || {};
-    const p = this._glb[file] || (this._glb[file] = this._playerReady.then(() => new GLTFLoader().loadAsync(`models/${file}.glb`)));
+    const p = this._glb[file] || (this._glb[file] = this._playerReady.then(() => loadGLB(file, () => this.alive)));
+    p.catch(() => { if (this._glb[file] === p) delete this._glb[file]; }); // 끝내 실패하면 다음에 꾸밀 때 새로 받는다
     return p.then((g) => {
       if (!this.alive || root !== this.decorRoot) return null;
       // 같은 모델을 다시 꺼낼 때는 복제해서 쓴다 (동물 친구는 뼈대가 있어 SkeletonUtils로)
@@ -415,10 +434,9 @@ export class Factory {
   }
 
   async _loadModels(character) {
-    const loader = new GLTFLoader();
     const put = async (file, x, y, z, ry = 0) => {
       try {
-        const g = await loader.loadAsync(`models/${file}.glb`);
+        const g = await loadGLB(file, () => this.alive);
         if (!this.alive) return null;
         g.scene.position.set(x, y, z);
         g.scene.rotation.y = ry;
@@ -428,19 +446,46 @@ export class Factory {
     };
     const who = character;
     const st = STATIONS.bench.stand;
-    const pg = await put(who, st[0], 0, st[1], Math.PI);
-    if (pg) this._setupPlayer(pg);
-    this._resolvePlayer();
-    const tg = await put('delivery-truck-a9537e', BELT_END + 3.2, 0, 0.2, Math.PI / 2);
-    if (tg) { this.truck = tg.scene; this.truckHome = this.truck.position.clone(); this._makeDoor(); }
+    // 기사 모델을 받기 전에도(못 받더라도) 일할 수 있게, 코드로 만든 간단한 기사를 먼저 세운다
+    this.player = this._simpleWorker();
+    this.player.position.set(st[0], 0, st[1]);
+    this.player.rotation.y = Math.PI;
+    this.scene.add(this.player);
+    put(who, st[0], 0, st[1], Math.PI).then((pg) => {
+      if (pg && this.alive) this._setupPlayer(pg);
+      this._resolvePlayer();
+    });
+    put('delivery-truck-a9537e', BELT_END + 3.2, 0, 0.2, Math.PI / 2).then((tg) => {
+      if (tg && this.alive) { this.truck = tg.scene; this.truckHome = this.truck.position.clone(); this._makeDoor(); }
+    });
     put('rooted-gantry-arm-f35c8f', -1.6, 0, -2.4, 0.5);
     put('timber-eur-pallet-a1f655', 2.0, 0, -2.6);
     put('material-pallet-6af263', 3.5, 0, -2.7, 0.3);
   }
 
   // ---------- 일꾼 ----------
+  _simpleWorker() {
+    const g = new THREE.Group();
+    const add = (geo, color, x, y, z) => { const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color })); m.position.set(x, y, z); g.add(m); };
+    add(new THREE.CylinderGeometry(0.1, 0.1, 0.75, 8), 0x4a3a30, -0.12, 0.38, 0);
+    add(new THREE.CylinderGeometry(0.1, 0.1, 0.75, 8), 0x4a3a30, 0.12, 0.38, 0);
+    add(new THREE.CylinderGeometry(0.22, 0.26, 0.7, 10), 0xe0b91f, 0, 1.08, 0);
+    add(new THREE.SphereGeometry(0.17, 12, 10), 0xe7b78f, 0, 1.6, 0);
+    add(new THREE.SphereGeometry(0.19, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xf2c200, 0, 1.64, 0);
+    return g;
+  }
+
+  // 모델을 받으면, 지금 서 있는(걷고 있는) 자리에서 간단한 기사와 바꾼다
   _setupPlayer(g) {
+    const old = this.player;
     this.player = g.scene;
+    if (old && old !== g.scene) {
+      g.scene.position.copy(old.position);
+      g.scene.rotation.y = old.rotation.y;
+      this.scene.remove(old);
+      old.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    }
+    this.modelReady = true;
     this.mixer = new THREE.AnimationMixer(this.player);
     this.actions = {};
     for (const clip of g.animations) {
@@ -545,7 +590,12 @@ export class Factory {
     else if (name === 'pack') Object.assign(g, { target: new THREE.Vector3(0, TABLE_Y + box / 2, 0), yaw: -0.35, pitch: 0.85, dist: (box * 2.6 + 0.9) * narrow });
     else if (name === 'ship') Object.assign(g, { target: new THREE.Vector3(4.6, 1.1, 0.2), yaw: -0.42, pitch: 0.32, dist: 7 * narrow });
     g.target = g.target.clone();
-    if (narrow > 1 && (name === 'work' || name === 'table' || name === 'pack')) g.target.y -= g.dist * 0.18;
+    // 세로 화면: 위쪽 주문서와 아래쪽 도구 칸 사이에 상자가 오게 한다
+    if (narrow > 1 && (name === 'work' || name === 'table' || name === 'pack')) {
+      const phone = this.camera.aspect < 0.6; // 휴대폰은 빈 자리가 좁아 상자를 조금 멀리서 본다
+      if (phone) g.dist *= 1.4;
+      g.target.y -= g.dist * (phone ? 0.06 : 0.1);
+    }
   }
 
   _step(now, dt) {
