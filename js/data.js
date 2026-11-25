@@ -2,34 +2,36 @@
 // 물건 크기 d = [가로, 높이, 세로] (cm). 상자는 물건과 딱 맞게 만든다.
 // fragile: 깨지기 쉬운 물건 → 꼭짓점마다 꼭짓점 보호대를 끼운다.
 // cold: 차갑게 보내는 물건 → 면 6개에 모두 보냉 은박을 붙인다.
+// sheet: 재단판(18×13칸)에 그릴 수 있는 전개도 가운데, 둘러싼 직사각형이 가장 작은 넓이(칸)
 // up: 이쪽이 위 → 옆면 4개에 위쪽 화살표 스티커를 붙인다(밑면과 수직인 면).
 
 export const ITEMS = {
-  puzzle: { name: '큐브 퍼즐', emoji: '🧩', d: [2, 2, 2], color: '#ff8a65' },
-  mug: { name: '머그컵', emoji: '☕', d: [3, 3, 3], color: '#90caf9', fragile: true },
-  clock: { name: '탁상시계', emoji: '⏰', d: [3, 3, 3], color: '#ef9a9a', fragile: true },
-  shoe: { name: '운동화', emoji: '👟', d: [5, 2, 3], color: '#b39ddb' },
-  robot: { name: '로봇 장난감', emoji: '🤖', d: [3, 4, 2], color: '#80cbc4' },
-  book: { name: '동화책', emoji: '📚', d: [5, 1, 4], color: '#ffcc80' },
-  phone: { name: '휴대폰', emoji: '📱', d: [3, 1, 5], color: '#b0bec5', fragile: true },
-  plant: { name: '작은 화분', emoji: '🌵', d: [2, 3, 2], color: '#a5d6a7', fragile: true, up: true },
-  bear: { name: '곰 인형', emoji: '🧸', d: [4, 3, 4], color: '#d7a77a' },
-  cake: { name: '케이크', emoji: '🎂', d: [4, 2, 4], color: '#f8bbd0', fragile: true, cold: true },
-  globe: { name: '지구본', emoji: '🌍', d: [4, 4, 4], color: '#81d4fa', fragile: true },
-  game: { name: '게임기', emoji: '🎮', d: [4, 1, 2], color: '#9fa8da' },
-  umbrella: { name: '접이식 우산', emoji: '☂️', d: [1, 1, 6], color: '#7986cb' },
-  milk: { name: '우유', emoji: '🥛', d: [2, 4, 2], color: '#e3f2fd', cold: true, up: true },
-  pizza: { name: '피자', emoji: '🍕', d: [5, 1, 5], color: '#ffb74d', up: true },
-  icecream: { name: '아이스크림', emoji: '🍦', d: [3, 2, 2], color: '#fff3e0', cold: true },
-  blocks: { name: '블록 세트', emoji: '🧱', d: [6, 2, 3], color: '#e57373' },
-  frame: { name: '액자', emoji: '🖼️', d: [4, 5, 1], color: '#bcaaa4', fragile: true, up: true },
+  puzzle: { name: '큐브 퍼즐', emoji: '🧩', d: [2, 2, 2], sheet: 40, color: '#ff8a65' },
+  mug: { name: '머그컵', emoji: '☕', d: [3, 3, 3], sheet: 90, color: '#90caf9', fragile: true },
+  clock: { name: '탁상시계', emoji: '⏰', d: [3, 3, 3], sheet: 90, color: '#ef9a9a', fragile: true },
+  shoe: { name: '운동화', emoji: '👟', d: [5, 2, 3], sheet: 90, color: '#b39ddb' },
+  robot: { name: '로봇 장난감', emoji: '🤖', d: [3, 4, 2], sheet: 80, color: '#80cbc4' },
+  book: { name: '동화책', emoji: '📚', d: [5, 1, 4], sheet: 70, color: '#ffcc80' },
+  phone: { name: '휴대폰', emoji: '📱', d: [3, 1, 5], sheet: 56, color: '#b0bec5', fragile: true },
+  plant: { name: '작은 화분', emoji: '🌵', d: [2, 3, 2], sheet: 52, color: '#a5d6a7', fragile: true, up: true },
+  bear: { name: '곰 인형', emoji: '🧸', d: [4, 3, 4], sheet: 136, color: '#d7a77a' },
+  cake: { name: '케이크', emoji: '🎂', d: [4, 2, 4], sheet: 96, color: '#f8bbd0', fragile: true, cold: true },
+  globe: { name: '지구본', emoji: '🌍', d: [4, 4, 4], sheet: 192, color: '#81d4fa', fragile: true },
+  game: { name: '게임기', emoji: '🎮', d: [4, 1, 2], sheet: 36, color: '#9fa8da' },
+  umbrella: { name: '접이식 우산', emoji: '☂️', d: [1, 1, 6], sheet: 32, color: '#7986cb' },
+  milk: { name: '우유', emoji: '🥛', d: [2, 4, 2], sheet: 64, color: '#e3f2fd', cold: true, up: true },
+  pizza: { name: '피자', emoji: '🍕', d: [5, 1, 5], sheet: 84, color: '#ffb74d', up: true },
+  icecream: { name: '아이스크림', emoji: '🍦', d: [3, 2, 2], sheet: 52, color: '#fff3e0', cold: true },
+  blocks: { name: '블록 세트', emoji: '🧱', d: [6, 2, 3], sheet: 100, color: '#e57373' },
+  frame: { name: '액자', emoji: '🖼️', d: [4, 5, 1], sheet: 70, color: '#bcaaa4', fragile: true, up: true },
 };
 
 export const CUSTOMERS = ['🐰 토끼 문구점', '🐻 곰돌이 마트', '🦊 여우 서점', '🐱 고양이 카페', '🐼 판다 장난감 가게', '🐸 개구리 꽃집', '🦉 부엉이 도서관', '🐧 펭귄 빵집'];
 
 // 재료 값: 테이프 1cm, 스티커 1장, 보호대 1개
 // roll: 테이프 롤(총 길이로 뽑기) 1cm, glue: 본드 1cm
-export const COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, glue: 5 };
+// sheet: 골판지 1칸(전개도를 둘러싼 직사각형 넓이만큼), glueBonus: 본드 상자를 보내면 더 받는 돈
+export const COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, glue: 5, sheet: 20, glueBonus: 500 };
 // 특별 손님: 급한 주문(기다리는 시간 절반, 돈 2배), 단골 손님(실수 없이 보내면 팁)
 // 붙이는 방식: 🩹 테이프 상자(접은 뒤 모서리 12개에 테이프) / 🧴 본드 상자(접기 전 만나는 선분 짝을 모두 찾아 본드)
 export const GLUE_CHANCE = 0.4;
@@ -44,7 +46,7 @@ export const DAYS = [
   { title: '첫 출근', items: ['puzzle', 'mug'], time: 330, every: 70, patience: 260, target: 4000,
     intro: ['어서 와요, 신입 택배 기사님! 저는 공장 로봇 박스봇이에요.', '주문을 고르면 작업대에서 골판지에 전개도를 그려 상자를 접고, 물건을 넣어요.', '오늘은 정사각형 6개로 둘러싸인 정육면체 상자만 들어와요. 정육면체도 면 6개, 모서리 12개, 꼭짓점 8개예요.', '테이프 출력기, 스티커 제작기, 포장재 선반을 돌아다니며 재료를 만들어 와서 상자를 포장해요. 재료는 가방에 30칸까지 들어가요. 바닥이나 기계를 톡 누르면 걸어가요!'] },
   { title: '직육면체 주문', items: ['puzzle', 'mug', 'shoe', 'robot'], time: 330, every: 60, patience: 240, target: 7000,
-    intro: ['오늘부터 직사각형 6개로 둘러싸인 직육면체 상자도 들어와요.', '직육면체는 길이가 같은 모서리가 4개씩 있어요. 테이프를 길이별로 몇 개씩 뽑아야 할지 생각해요!'] },
+    intro: ['오늘부터 직사각형 6개로 둘러싸인 직육면체 상자도 들어와요.', '직육면체는 길이가 같은 모서리가 4개씩 있어요. 테이프를 길이별로 몇 개씩 뽑아야 할지 생각해요!', '골판지는 전개도를 둘러싼 주황색 직사각형만큼 값을 내요. 전개도 모양을 바꾸면 골판지를 아낄 수 있어요. 하지만 같은 유형만 쓰면 콤보가 끊겨요!'] },
   { title: '납작한 물건', items: ['shoe', 'robot', 'book', 'phone', 'plant'], time: 330, every: 55, patience: 220, target: 9000,
     intro: ['책이나 휴대폰처럼 납작한 물건이 많은 날이에요.', '높이가 1cm인 직육면체도 면 6개, 모서리 12개, 꼭짓점 8개예요. 깨지기 쉬운 물건은 꼭짓점마다 보호대를 끼워요.'] },
   { title: '바쁜 주말', items: ['mug', 'bear', 'cake', 'globe', 'book', 'game'], time: 360, every: 50, patience: 210, target: 12000,
@@ -73,7 +75,7 @@ export const UPGRADES = [
 
 export function payFor(item) {
   const [a, b, c] = item.d;
-  return Math.round((1500 + 60 * 2 * (a * b + b * c + a * c) + (item.fragile ? 600 : 0) + (item.cold ? 500 : 0) + (item.up ? 300 : 0)) / 100) * 100;
+  return Math.round((1500 + 60 * 2 * (a * b + b * c + a * c) + (item.fragile ? 600 : 0) + (item.cold ? 500 : 0) + (item.up ? 300 : 0) + item.sheet * COST.sheet) / 100) * 100; // 가장 알뜰한 골판지 값은 손님이 낸다
 }
 
 // 기사 옷(캐릭터): model = models/ 안의 Polyfork 캐릭터 파일
@@ -110,3 +112,47 @@ export const DECOR = [
   { id: 'pet-cat', slot: 'pet', name: '고양이 친구', icon: '🐈', price: 4000, where: '기사를 졸졸 따라다녀요' },
 ];
 export const DECOR_ONE = new Set(DECOR.map((d) => d.slot).filter((sl, i, a) => a.indexOf(sl) !== i));
+
+// 오늘의 계약: 2일차부터 근무 전에 3장(쉬움·보통·어려움 한 장씩) 중 하나를 고른다. 이루면 바로 보너스.
+// 서버(tools/ranking/Code.gs)도 같은 표로 다시 센다: python tools/ranking/sync.py
+export const CONTRACT_FROM = 2;
+export const CONTRACTS = [
+  { id: 'ship2', lv: 1, kind: 'ship', need: 2 },
+  { id: 'perfect1', lv: 1, kind: 'perfect', need: 1 },
+  { id: 'glue1', lv: 1, kind: 'glue', need: 1 },
+  { id: 'types2', lv: 1, kind: 'types', need: 2 },
+  { id: 'perfect2', lv: 2, kind: 'perfect', need: 2 },
+  { id: 'glue2', lv: 2, kind: 'glue', need: 2 },
+  { id: 'types3', lv: 2, kind: 'types', need: 3 },
+  { id: 'thrift1', lv: 2, kind: 'thrift', need: 1 },
+  { id: 'g231', lv: 2, kind: 'group', need: 1, ids: [7, 8, 9], g: '2-3-1형' },
+  { id: 'urgent1', lv: 2, kind: 'urgent', need: 1 },
+  { id: 'perfect3', lv: 3, kind: 'perfect', need: 3 },
+  { id: 'thrift3', lv: 3, kind: 'thrift', need: 3 },
+  { id: 'g222', lv: 3, kind: 'group', need: 1, ids: [10], g: '2-2-2형' },
+  { id: 'g33', lv: 3, kind: 'group', need: 1, ids: [11], g: '3-3형' },
+  { id: 'combo4', lv: 3, kind: 'combo', need: 4 },
+];
+export const CONTRACT_RATE = [0, 0.06, 0.14, 0.24];
+export const contractReward = (c, target) => Math.round(Math.min(16000, target) * CONTRACT_RATE[c.lv] / 100) * 100;
+export function contractText(c) {
+  return {
+    ship: `상자 ${c.need}개 보내기`, perfect: `실수 없는 완벽한 상자 ${c.need}개`, glue: `🧴 본드 상자 ${c.need}개 보내기`,
+    types: `서로 다른 전개도 유형 ${c.need}가지`, thrift: `✂️ 가장 알뜰한 재단 ${c.need}번`, group: `${c.g} 전개도로 상자 ${c.need}개`,
+    urgent: `⚡ 급한 손님 상자 ${c.need}개`, combo: `📐 전개도 콤보 ${c.need} 만들기`,
+  }[c.kind];
+}
+// 출고 기록으로 지금까지 이룬 수
+export function contractCount(c, log) {
+  const nets = log.map((b) => b.net).filter((x) => x != null);
+  if (c.kind === 'ship') return log.length;
+  if (c.kind === 'perfect') return log.filter((b) => b.mistakes === 0).length;
+  if (c.kind === 'glue') return log.filter((b) => b.seal === 'glue').length;
+  if (c.kind === 'urgent') return log.filter((b) => b.ev === 'urgent').length;
+  if (c.kind === 'thrift') return log.filter((b) => b.a === ITEMS[b.item].sheet).length;
+  if (c.kind === 'group') return nets.filter((x) => c.ids.includes(x)).length;
+  if (c.kind === 'types') return new Set(nets).size;
+  let chain = [], best = 0;
+  nets.forEach((x) => { chain = chain.includes(x) ? [x] : [...chain, x]; best = Math.max(best, chain.length); });
+  return best;
+}

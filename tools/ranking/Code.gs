@@ -19,24 +19,24 @@
 
 // ---------- 게임 자료 (js/data.js와 같아야 함) ----------
 var ITEMS = {
-  puzzle: { d: [2, 2, 2] },
-  mug: { d: [3, 3, 3], fragile: 1 },
-  clock: { d: [3, 3, 3], fragile: 1 },
-  shoe: { d: [5, 2, 3] },
-  robot: { d: [3, 4, 2] },
-  book: { d: [5, 1, 4] },
-  phone: { d: [3, 1, 5], fragile: 1 },
-  plant: { d: [2, 3, 2], fragile: 1, up: 1 },
-  bear: { d: [4, 3, 4] },
-  cake: { d: [4, 2, 4], fragile: 1, cold: 1 },
-  globe: { d: [4, 4, 4], fragile: 1 },
-  game: { d: [4, 1, 2] },
-  umbrella: { d: [1, 1, 6] },
-  milk: { d: [2, 4, 2], cold: 1, up: 1 },
-  pizza: { d: [5, 1, 5], up: 1 },
-  icecream: { d: [3, 2, 2], cold: 1 },
-  blocks: { d: [6, 2, 3] },
-  frame: { d: [4, 5, 1], fragile: 1, up: 1 },
+  puzzle: { d: [2, 2, 2], s: 40 },
+  mug: { d: [3, 3, 3], s: 90, fragile: 1 },
+  clock: { d: [3, 3, 3], s: 90, fragile: 1 },
+  shoe: { d: [5, 2, 3], s: 90 },
+  robot: { d: [3, 4, 2], s: 80 },
+  book: { d: [5, 1, 4], s: 70 },
+  phone: { d: [3, 1, 5], s: 56, fragile: 1 },
+  plant: { d: [2, 3, 2], s: 52, fragile: 1, up: 1 },
+  bear: { d: [4, 3, 4], s: 136 },
+  cake: { d: [4, 2, 4], s: 96, fragile: 1, cold: 1 },
+  globe: { d: [4, 4, 4], s: 192, fragile: 1 },
+  game: { d: [4, 1, 2], s: 36 },
+  umbrella: { d: [1, 1, 6], s: 32 },
+  milk: { d: [2, 4, 2], s: 64, cold: 1, up: 1 },
+  pizza: { d: [5, 1, 5], s: 84, up: 1 },
+  icecream: { d: [3, 2, 2], s: 52, cold: 1 },
+  blocks: { d: [6, 2, 3], s: 100 },
+  frame: { d: [4, 5, 1], s: 70, fragile: 1, up: 1 },
 };
 var DAYS = [
   { items: ['puzzle', 'mug'], time: 330, every: 70, target: 4000 },
@@ -46,7 +46,26 @@ var DAYS = [
   { items: ['icecream', 'milk', 'cake', 'pizza', 'plant', 'frame', 'mug'], time: 360, every: 52, target: 13000 },
   { items: ['umbrella', 'blocks', 'shoe', 'robot', 'book', 'game', 'milk', 'pizza'], time: 360, every: 50, target: 14000, sketch: 1 },
 ];
-var COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, glue: 5 };
+var COST = { tape: 10, sticker: 50, guard: 60, foil: 40, roll: 8, glue: 5, sheet: 20, glueBonus: 500 };
+// 오늘의 계약 (js/data.js CONTRACTS와 같아야 함: sync.py가 채운다)
+var CONTRACTS = [
+  { id: 'ship2', lv: 1, kind: 'ship', need: 2 },
+  { id: 'perfect1', lv: 1, kind: 'perfect', need: 1 },
+  { id: 'glue1', lv: 1, kind: 'glue', need: 1 },
+  { id: 'types2', lv: 1, kind: 'types', need: 2 },
+  { id: 'perfect2', lv: 2, kind: 'perfect', need: 2 },
+  { id: 'glue2', lv: 2, kind: 'glue', need: 2 },
+  { id: 'types3', lv: 2, kind: 'types', need: 3 },
+  { id: 'thrift1', lv: 2, kind: 'thrift', need: 1 },
+  { id: 'g231', lv: 2, kind: 'group', need: 1, ids: [7, 8, 9], g: '2-3-1형' },
+  { id: 'urgent1', lv: 2, kind: 'urgent', need: 1 },
+  { id: 'perfect3', lv: 3, kind: 'perfect', need: 3 },
+  { id: 'thrift3', lv: 3, kind: 'thrift', need: 3 },
+  { id: 'g222', lv: 3, kind: 'group', need: 1, ids: [10], g: '2-2-2형' },
+  { id: 'g33', lv: 3, kind: 'group', need: 1, ids: [11], g: '3-3형' },
+  { id: 'combo4', lv: 3, kind: 'combo', need: 4 },
+];
+var CONTRACT_RATE = [0, 0.06, 0.14, 0.24], CONTRACT_FROM = 2;
 var COMBO_STEP = 300, COMBO_MAX = 1500, SKETCH_PAY = 300, TRUCK_PLUS = 30, MAX_TIP = 0.3;
 var REGULAR_TIP = 500;      // 단골 손님: 실수 없이 보내면 팁 (js/data.js EVENTS.regular.tip)
 var MAX_EVENT_SHARE = 0.5; // 급한 주문·단골 손님은 많아야 상자의 절반쯤
@@ -96,14 +115,30 @@ function dayConfig(n) {
 }
 function payFor(it) {
   var a = it.d[0], b = it.d[1], c = it.d[2];
-  return Math.round((1500 + 60 * 2 * (a * b + b * c + a * c) + (it.fragile ? 600 : 0) + (it.cold ? 500 : 0) + (it.up ? 300 : 0)) / 100) * 100;
+  return Math.round((1500 + 60 * 2 * (a * b + b * c + a * c) + (it.fragile ? 600 : 0) + (it.cold ? 500 : 0) + (it.up ? 300 : 0) + it.s * COST.sheet) / 100) * 100;
 }
-function minMaterial(it) {
+// 오늘의 계약: 출고 기록으로 다시 센다
+function contractCount(c, log) {
+  var nets = [], k = 0, i;
+  for (i = 0; i < log.length; i++) if (log[i].net != null) nets.push(Number(log[i].net));
+  if (c.kind === 'ship') return log.length;
+  if (c.kind === 'types' || c.kind === 'combo') {
+    var seen = {}, chain = [], best = 0;
+    nets.forEach(function (n) { seen[n] = 1; chain = chain.indexOf(n) >= 0 ? [n] : chain.concat([n]); best = Math.max(best, chain.length); });
+    return c.kind === 'types' ? Object.keys(seen).length : best;
+  }
+  if (c.kind === 'group') { nets.forEach(function (n) { if (c.ids.indexOf(n) >= 0) k++; }); return k; }
+  log.forEach(function (b) {
+    if (c.kind === 'perfect' ? Number(b.mistakes) === 0 : c.kind === 'glue' ? b.seal === 'glue' : c.kind === 'urgent' ? b.ev === 'urgent' : c.kind === 'thrift' ? Number(b.a) === ITEMS[b.item].s : false) k++;
+  });
+  return k;
+}
+function contractReward(c, target) { return Math.round(Math.min(16000, target) * CONTRACT_RATE[c.lv] / 100) * 100; }
+function minMaterial(it, seal) {
   var a = it.d[0], b = it.d[1], c = it.d[2];
   // 붙이기: 🩹 테이프 상자는 모서리 12곳에 테이프, 🧴 본드 상자는 잘린 모서리 7곳에 본드(접힌 모서리 5곳은 그냥 접힘).
-  // 어느 쪽인지는 게임이 정하므로 둘 중 싼 쪽을 최소로 본다
   var m = Math.min(a, b, c);
-  var tapeMin = Math.min(12 * m * Math.min(COST.tape, COST.roll || COST.tape), 7 * m * (COST.glue || 0));
+  var tapeMin = seal === 'glue' ? 7 * m * COST.glue : 12 * m * Math.min(COST.tape, COST.roll || COST.tape);
   return tapeMin + 6 * COST.sticker + (it.fragile ? 8 * COST.guard : 0) + (it.cold ? 6 * COST.foil : 0) + (it.up ? 4 * COST.sticker : 0);
 }
 function maxOrders(cfg) { return 1 + Math.floor((cfg.time + TRUCK_PLUS - 42) / cfg.every); }
@@ -194,10 +229,13 @@ function submit(cls, nick, q) {
     if (!(t >= 5 && t <= cfg.time + TRUCK_PLUS + 5)) return fail('출고 시각이 근무 시간 밖이에요');
     if (t - last < MIN_GAP) return fail('상자를 너무 빨리 출고했어요');
     last = t;
-    var pay = payFor(it) + (b.sketch ? SKETCH_PAY : 0);
+    var pay = payFor(it) + (b.sketch ? SKETCH_PAY : 0) + (b.seal === 'glue' ? COST.glueBonus : 0);
+    // 골판지 값: 둘러싼 직사각형 넓이만큼. 가장 작은 전개도보다 작을 수 없다
+    var area = b.a == null ? it.s : Number(b.a);
+    if (!(area >= it.s && area <= 18 * 13 && area % 1 === 0)) return fail('골판지 넓이가 이상해요');
     if (b.ev === 'urgent' || b.ev === 'regular') events++;
     if (b.ev === 'urgent') pay *= 2;                       // 급한 주문: 돈 2배
-    maxRev += pay + Math.round(pay * MAX_TIP / 100) * 100 - minMaterial(it);
+    maxRev += pay + Math.round(pay * MAX_TIP / 100) * 100 - minMaterial(it, b.seal) - area * COST.sheet;
     if (b.ev === 'regular' && Number(b.mistakes) === 0) maxRev += REGULAR_TIP;
     if (b.net != null) {
       var n = Number(b.net);
@@ -209,7 +247,13 @@ function submit(cls, nick, q) {
     }
     if (Number(b.mistakes) === 0) perfect++;
   }
-  if (events > Math.ceil(log.length * MAX_EVENT_SHARE) + 1) return fail('특별 손님이 너무 많아요');
+  var con = null;
+  if (q.contract) {
+    for (var z = 0; z < CONTRACTS.length; z++) if (CONTRACTS[z].id === q.contract) con = CONTRACTS[z];
+    if (!con || day < CONTRACT_FROM) return fail('없는 계약이에요');
+    if (contractCount(con, log) >= con.need) maxRev += contractReward(con, cfg.target);
+  }
+  if (events > Math.ceil(log.length * (con && con.kind === 'urgent' ? 0.75 : MAX_EVENT_SHARE)) + 3) return fail('특별 손님이 너무 많아요');
   // 3) 매출: 기록으로 계산한 최대치를 넘으면 조작
   var earned = Math.round(Number(q.earned) || 0);
   if (earned > maxRev + 100) return fail('매출이 출고 기록보다 많아요');

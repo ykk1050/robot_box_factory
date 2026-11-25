@@ -50,9 +50,9 @@ export function sketchPicture(dims, size = 150) {
 }
 
 export class Cutter {
-  constructor(host, { cols = 18, rows = 13, onCut, onChange } = {}) {
+  constructor(host, { cols = 18, rows = 13, onCut, onChange, onDraw } = {}) {
     this.cols = cols; this.rows = rows; this.rects = []; this.red = new Set();
-    this.onCut = onCut; this.onChange = onChange;
+    this.onCut = onCut; this.onChange = onChange; this.onDraw = onDraw;
     this.svg = S('svg', { viewBox: `-0.3 -0.3 ${cols + 0.6} ${rows + 0.6}`, preserveAspectRatio: 'xMidYMid meet', class: 'sheet' });
     host.append(this.svg);
     const bg = S('rect', { x: 0, y: 0, width: cols, height: rows, fill: '#e8c79a', rx: 0.15 });
@@ -138,6 +138,18 @@ export class Cutter {
       const L = netLines(this.rects, analyzeNet(this.rects));
       L.cut.forEach(({ p, q }) => this.gLines.append(S('line', { x1: p[0], y1: p[1], x2: q[0], y2: q[1], stroke: '#3b2a1e', 'stroke-width': 0.08, 'stroke-linecap': 'round' })));
       L.fold.forEach(({ p, q }) => this.gLines.append(S('line', { x1: p[0], y1: p[1], x2: q[0], y2: q[1], stroke: '#3b2a1e', 'stroke-width': 0.06, 'stroke-dasharray': '0.2 0.15' })));
+      // 골판지 값을 내는 자리: 전개도를 둘러싼 직사각형
+      const b = this.box();
+      this.gLines.append(S('rect', { x: b.x, y: b.y, width: b.w, height: b.h, fill: 'none', stroke: '#e0622f', 'stroke-width': 0.1, 'stroke-dasharray': '0.45 0.25', rx: 0.1 }));
     }
+    this.onDraw?.(this.box());
+  }
+
+  // 그린 면을 모두 둘러싼 직사각형
+  box() {
+    if (!this.rects.length) return null;
+    const x = Math.min(...this.rects.map((r) => r.x)), y = Math.min(...this.rects.map((r) => r.y));
+    const w = Math.max(...this.rects.map((r) => r.x + r.w)) - x, hh = Math.max(...this.rects.map((r) => r.y + r.h)) - y;
+    return { x, y, w, h: hh, area: w * hh };
   }
 }

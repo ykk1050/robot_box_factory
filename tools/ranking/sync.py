@@ -14,7 +14,8 @@ for m in re.finditer(r"^\s*(\w+): \{(.*)\},?\s*$", items_src, re.M):
     key, body = m.group(1), m.group(2)
     d = re.search(r"d: \[(\d+), (\d+), (\d+)\]", body)
     flags = ''.join(f", {f}: 1" for f in ('fragile', 'cold', 'up') if re.search(rf"\b{f}: true", body))
-    items.append(f"  {key}: {{ d: [{d.group(1)}, {d.group(2)}, {d.group(3)}]{flags} }},")
+    sheet = re.search(r"sheet: (\d+)", body).group(1)
+    items.append(f"  {key}: {{ d: [{d.group(1)}, {d.group(2)}, {d.group(3)}], s: {sheet}{flags} }},")
 
 days_src = data[data.index('export const DAYS'):data.index('export function dayConfig')]
 days = []
@@ -26,6 +27,11 @@ cost = re.search(r"export const COST = (\{[^}]*\});", data).group(1)
 
 block = ("var ITEMS = {\n" + "\n".join(items) + "\n};\nvar DAYS = [\n" + "\n".join(days) + "\n];\nvar COST = " + cost + ";")
 new = re.sub(r"var ITEMS = \{.*?\nvar COST = \{[^}]*\};", lambda _: block, gs, flags=re.S)
+# 오늘의 계약
+con = re.search(r"export const CONTRACTS = (\[.*?\n\]);", data, re.S).group(1)
+rate = re.search(r"export const CONTRACT_RATE = (\[[^\]]*\]);", data).group(1)
+frm = re.search(r"export const CONTRACT_FROM = (\d+);", data).group(1)
+new = re.sub(r"var CONTRACTS = \[.*?\n\];\nvar CONTRACT_RATE = \[[^\]]*\], CONTRACT_FROM = \d+;", lambda _: f"var CONTRACTS = {con};\nvar CONTRACT_RATE = {rate}, CONTRACT_FROM = {frm};", new, flags=re.S)
 # 닉네임 단어 (js/nickwords.js)
 import json
 nw = (root / 'js' / 'nickwords.js').read_text(encoding='utf-8')

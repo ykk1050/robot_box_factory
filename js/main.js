@@ -1,11 +1,11 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
-import { ITEMS, CUSTOMERS, COST, BAG, EVENTS, GLUE_CHANCE, GLUE_HINT, OUTFITS, DECOR, DECOR_ONE, dayConfig, UPGRADES, payFor } from './data.js';
+import { ITEMS, CUSTOMERS, COST, BAG, EVENTS, GLUE_CHANCE, GLUE_HINT, OUTFITS, DECOR, DECOR_ONE, dayConfig, UPGRADES, payFor, CONTRACTS, CONTRACT_FROM, contractReward, contractText, contractCount } from './data.js';
 import { sfx, pip, chime, coin, comboSound, tick, tapeStart, tapeMove, tapeStop, setAudio, music } from './sound.js';
 import { RANK_URL, RANK_ALL, TEST, rankOn, CATS, call } from './rank.js';
 import { NICK, NICK_WORDS, NICK_STEPS } from './nickwords.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.032';
+export const VERSION = window.BUILD || 'v1.033';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, netBoundary, netLines, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -300,18 +300,39 @@ function showShop(after, tab = 'up') {
 }
 
 // ---------- 하루 시작 ----------
+// 오늘의 계약 3장(쉬움·보통·어려움 한 장씩). 근무를 마치기 전에는 다시 열어도 같은 계약이 나온다
+function offersFor(n) {
+  if (n < CONTRACT_FROM) return [];
+  save.offers = save.offers || {};
+  const known = (save.offers[n] || []).map((id) => CONTRACTS.find((c) => c.id === id)).filter(Boolean);
+  if (known.length === 3) return known;
+  const list = [1, 2, 3].map((lv) => { const all = CONTRACTS.filter((c) => c.lv === lv); return all[Math.floor(Math.random() * all.length)]; });
+  save.offers[n] = list.map((c) => c.id); store();
+  return list;
+}
 function showIntro(n) {
   const cfg = dayConfig(n);
+  const offers = offersFor(n);
+  let picked = offers[0] || null;
+  const cards = h('div', { class: 'contracts' });
+  const drawCards = () => {
+    cards.innerHTML = '';
+    offers.forEach((c) => cards.append(h('button', { class: 'contract lv' + c.lv + (c === picked ? ' sel' : ''), 'aria-pressed': c === picked ? 'true' : 'false', onclick: () => { sfx('click'); picked = c; drawCards(); } },
+      h('small', {}, ['', '쉬움', '보통', '어려움'][c.lv]), h('b', {}, contractText(c)), h('span', { class: 'cpay' }, `성공하면 +${won(contractReward(c, cfg.target))}`))));
+  };
+  drawCards();
   const sec = cfg.time + (save.up.truck ? 30 : 0);
   const ov = h('div', { class: 'overlay' }, h('div', { class: 'card intro' },
     h('div', { class: 'intro-head' }, h('img', { src: 'img/robot.webp', alt: '' }), h('div', {}, h('p', { class: 'kicker' }, `${n}일차`), h('h2', {}, cfg.title))),
     ...cfg.intro.map((t) => h('p', { class: 'say' }, t)),
     h('p', { class: 'say' }, `📐 전개도 콤보: 앞에서 만든 상자와 다른 유형의 전개도로 이어서 상자를 만들면, 이어진 유형 수에 따라 보너스(최대 ${won(COMBO_MAX)})를 받아요. 같은 유형이 다시 나오면 콤보가 처음부터 다시 시작돼요.`),
+    offers.length ? h('p', { class: 'chead' }, '📜 오늘의 계약을 하나 골라요') : null,
+    offers.length ? cards : null,
     h('p', { class: 'goal' }, `🎯 목표 매출 ${won(cfg.target)} · 🚚 트럭 출발까지 ${Math.floor(sec / 60)}분${sec % 60 ? ` ${sec % 60}초` : ''}`),
     h('div', { class: 'row end wrap' },
       h('button', { class: 'btn ghost', onclick: () => { sfx('click'); ov.remove(); } }, '닫기'),
       !save.tutorialDone ? h('button', { class: 'btn ghost tut-glow', onclick: () => { sfx('click'); ov.remove(); playDay(1, { tutorial: true }); } }, '🎓 먼저 조작 연습') : null,
-      h('button', { class: 'btn', onclick: () => { sfx('click'); ov.remove(); playDay(n); } }, '근무 시작!'))));
+      h('button', { class: 'btn', onclick: () => { sfx('click'); ov.remove(); playDay(n, { contract: picked }); } }, '근무 시작!'))));
   app.append(ov);
 }
 
@@ -421,6 +442,8 @@ async function playDay(n, opts = {}) {
   const netsToday = new Set();
   // 랭킹: 근무표를 받고, 출고할 때마다 기록을 남긴다(서버가 이 기록으로 점수를 다시 계산한다)
   const shipLog = [];
+  const contract = tutorial ? null : opts.contract || null;
+  let contractDone = false;
   let rankToken = null, rankStartMsg = '';
   if (!tutorial && rankOn() && save.rank) call({ act: 'start', ...rankQ(), day: n }).then((r) => { if (r.ok) rankToken = r.token; else rankStartMsg = r.msg; });
 
@@ -429,6 +452,7 @@ async function playDay(n, opts = {}) {
     earned += v;
     if (!tutorial) { save.money = Math.max(0, save.money + v); store(); } // 연습은 저장된 돈을 바꾸지 않는다
     const f = h('div', { class: 'float ' + (v >= 0 ? 'plus' : 'minus') }, `${v >= 0 ? '+' : '−'}${won(Math.abs(v))}${why ? ' ' + why : ''}`);
+    f.style.top = `${fx.children.length * 34}px`; // 돈이 한꺼번에 들어와도 글자가 겹치지 않게
     fx.append(f); setTimeout(() => f.remove(), 1800);
     drawHud();
   };
@@ -439,13 +463,14 @@ async function playDay(n, opts = {}) {
   const timeTxt = h('span', { class: 'ttxt' });
   const earnEl = h('span', { class: 'pill' });
   const doneEl = h('span', { class: 'pill' });
+  const contractEl = contract ? h('button', { class: 'pill contractpill', title: '오늘의 계약', onclick: () => say(`📜 오늘의 계약: ${contractText(contract)} (${contractDone ? '성공!' : `지금 ${Math.min(contract.need, contractCount(contract, shipLog))}/${contract.need}`}) · 보너스 ${won(contractReward(contract, cfg.target))}`) }) : null;
   const comboEl = h('button', { class: 'pill combo', title: '전개도 유형 보기', onclick: () => openNetGuide() });
   const coach = h('div', { class: 'coach' });
   hud.append(...[h('button', { class: 'btn ghost small', 'aria-label': '일시정지', onclick: () => { sfx('click'); pause(); } }, '⏸'),
     tutorial ? null : h('button', { class: 'btn ghost small', 'aria-label': '공장 꾸미기', onclick: () => { sfx('click'); openDecor(); } }, '🎨'),
     h('span', { class: 'pill day' }, tutorial ? '🎓 조작 연습' : `${n}일차`),
     tutorial ? coach : h('div', { class: 'timer' }, h('span', {}, '🚚'), timeBar, timeTxt),
-    tutorial ? null : earnEl, comboEl, doneEl].filter(Boolean));
+    tutorial ? null : earnEl, contractEl, comboEl, doneEl].filter(Boolean));
   function openNetGuide() {
     if (over) return;
     sfx('click');
@@ -721,12 +746,23 @@ async function playDay(n, opts = {}) {
     timeTxt.textContent = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
     earnEl.textContent = `💰 ${won(earned)} / ${won(cfg.target)}`;
     doneEl.textContent = `📦 ${done}`;
+    if (contractEl) { contractEl.textContent = contractDone ? '📜 성공!' : `📜 ${Math.min(contract.need, contractCount(contract, shipLog))}/${contract.need}`; contractEl.classList.toggle('done', contractDone); }
     if (!tutorial && !goalHit && earned >= cfg.target) { goalHit = true; setTimeout(() => { if (!over) { banner('🎯 목표 달성!'); sfx('goal'); confetti(26); } }, 900); }
   }
   // ---------- 손맛: 도장·색종이·동전 ----------
   let goalHit = false;
   const bump = (el) => { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); };
   const gone = (el, ms) => { juice.append(el); setTimeout(() => el.remove(), ms); };
+  // 계약을 이루면 바로 보너스
+  function checkContract() {
+    if (!contract || contractDone || contractCount(contract, shipLog) < contract.need) return;
+    contractDone = true;
+    setTimeout(() => {
+      if (over) return;
+      banner('📜 계약 성공!'); sfx('goal'); confetti(24); if (contractEl) bump(contractEl);
+    }, 1500);
+    money(contractReward(contract, cfg.target), '📜 계약 성공!');
+  }
   function banner(t) { juice.querySelectorAll('.jbanner').forEach((x) => x.remove()); gone(h('div', { class: 'jbanner' }, t), 1700); }
   function stampMark(perfect) {
     sfx('stamp', { rate: perfect ? 1 : 1.15, vol: perfect ? 1 : 0.7 });
@@ -823,12 +859,15 @@ async function playDay(n, opts = {}) {
     const sketch = !first && !tutorial && Math.random() < (cfg.sketch || 0);
     // 특별 손님: ⚡ 급한 주문(기다리는 시간 절반, 돈 2배), ⭐ 단골 손님(실수 없이 보내면 팁)
     const r = Math.random();
-    const ev = first || tutorial ? null : n >= EVENTS.urgent.from && r < EVENTS.urgent.chance ? 'urgent' : r < EVENTS.urgent.chance + EVENTS.regular.chance ? 'regular' : null;
+    // 계약에 필요한 손님은 조금 더 자주 온다 (운이 나빠서 못 이루는 일이 없게)
+    const want = contract && !contractDone ? contract.kind : '';
+    const urgentP = want === 'urgent' ? 0.35 : EVENTS.urgent.chance;
+    const ev = first || tutorial ? null : n >= EVENTS.urgent.from && r < urgentP ? 'urgent' : r < urgentP + EVENTS.regular.chance ? 'regular' : null;
     // 붙이는 방식은 주문마다 섞여 나온다 (첫 주문·튜토리얼은 테이프)
-    const seal = !first && !tutorial && Math.random() < GLUE_CHANCE ? 'glue' : 'tape';
+    const seal = !first && !tutorial && Math.random() < (want === 'glue' ? 0.65 : GLUE_CHANCE) ? 'glue' : 'tape';
     let cust = CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)];
     if (ev === 'regular') cust = '⭐ 단골 ' + cust;
-    const base = payFor(item) + (sketch ? 300 : 0);
+    const base = payFor(item) + (sketch ? 300 : 0) + (seal === 'glue' ? COST.glueBonus : 0);
     const pat = ev === 'urgent' ? Math.round(cfg.patience / 2) : cfg.patience;
     orders.push({ id: ++orderSeq, item, sketch, seal, ev, cust, pay: ev === 'urgent' ? base * 2 : base, patience: pat, left: pat, mistakes: 0 });
     if (ev === 'urgent') say(`⚡ 급한 주문이 들어왔어요! 손님이 오래 못 기다리지만 돈을 2배로 줘요.`);
@@ -846,7 +885,7 @@ async function playDay(n, opts = {}) {
         o.el = h('button', { class: 'ticket' + (o.ev ? ' ev-' + o.ev : ''), onclick: () => pickOrder(o) },
           o.ev ? h('span', { class: 'evtag' }, o.ev === 'urgent' ? '⚡ 급한 주문 ×2' : '⭐ 단골') : null,
           h('span', { class: 'temoji' }, o.item.emoji),
-          h('span', { class: 'tbody' }, h('b', {}, o.item.name), h('small', {}, o.sketch ? '📐 겨냥도 주문' : `가로 ${o.item.d[0]} · 세로 ${o.item.d[2]} · 높이 ${o.item.d[1]}`), h('small', { class: 'seal seal-' + o.seal }, o.seal === 'glue' ? '🧴 본드 상자' : '🩹 테이프 상자'), h('small', { class: 'pay' }, won(o.pay) + markIcons(o.item))),
+          h('span', { class: 'tbody' }, h('b', {}, o.item.name), h('small', {}, o.sketch ? '📐 겨냥도 주문' : `가로 ${o.item.d[0]} · 세로 ${o.item.d[2]} · 높이 ${o.item.d[1]}`), h('small', { class: 'seal seal-' + o.seal }, o.seal === 'glue' ? `🧴 본드 상자 +${won(COST.glueBonus)}` : '🩹 테이프 상자'), h('small', { class: 'pay' }, won(o.pay) + markIcons(o.item))),
           h('span', { class: 'pat' }, o.bar));
       }
       if (!o.el.isConnected) tickets.append(o.el);
@@ -909,8 +948,10 @@ async function playDay(n, opts = {}) {
     cutWrap.innerHTML = '';
     const dieKey = [...o.item.d].sort((a, b) => a - b).join('x');
     const hasDie = save.up.die && save.dies[dieKey];
+    const sheetInfo = h('small', { class: 'sheetinfo' });
+    const rec = (save.sheets || {})[dieKey];
     cutWrap.append(h('div', { class: 'ctools' },
-      h('span', { class: 'ctitle' }, '✂️ 재단기 · 손가락으로 끌어서 면을 그려요'),
+      h('span', { class: 'ctitle' }, '✂️ 손가락으로 끌어서 면을 그려요', sheetInfo),
       hasDie ? h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); cutter.set(save.dies[dieKey]); say('금형으로 한 번에 그렸어요!'); } }, '🗂 금형') : null,
       h('button', { class: 'btn ghost small', onclick: () => openNetGuide() }, '📐 유형'),
       h('button', { class: 'btn ghost small', onclick: () => { sfx('click'); const had = cutter.rects.length; cutter.set([]); if (had) tutEv('remove'); } }, '모두 지우기'),
@@ -918,6 +959,7 @@ async function playDay(n, opts = {}) {
     const host = h('div', { class: 'sheet-host' });
     cutWrap.append(host);
     cutter = new Cutter(host, {
+      onDraw: (b) => { sheetInfo.textContent = b ? `📏 골판지 ${b.w}×${b.h} = ${b.area}칸 · ${won(b.area * COST.sheet)}` : `📏 골판지는 1칸에 ${won(COST.sheet)}${rec ? ` · 내 기록 ${rec}칸` : ''}`; },
       onChange: (k, r) => {
         if (k === 'overlap') say('다른 면과 겹치게 그릴 수 없어요.');
         else if (k === 'add' && tutBlock('draw', r)) { cutter.rects.pop(); cutter.draw(); }
@@ -984,6 +1026,17 @@ async function playDay(n, opts = {}) {
     sfx('fold');
     await F.closeLid(900 * fast);
     if (!active || over) return;
+    // 골판지 값: 전개도를 둘러싼 직사각형 넓이만큼 (못 쓰게 된 골판지는 앞에서 300원만 냈다)
+    const bx = cutter.box();
+    active.area = bx ? bx.area : active.item.sheet;
+    active.thrift = active.area === active.item.sheet;
+    if (!tutorial) {
+      money(-active.area * COST.sheet, `골판지 ${active.area}칸`);
+      const dk = [...active.item.d].sort((a, b) => a - b).join('x');
+      save.sheets = save.sheets || {};
+      if (active.thrift) { const it = active.item; setTimeout(() => { if (active && active.item === it) { banner('✂️ 가장 알뜰한 재단!'); chime(); } }, 700); }
+      if (!save.sheets[dk] || active.area < save.sheets[dk]) { save.sheets[dk] = active.area; store(); }
+    }
     if (save.up.die) { save.dies[[...active.item.d].sort((a, b) => a - b).join('x')] = rects; store(); }
     active.net = classifyNet(A);
     if (active.net) {
@@ -1278,7 +1331,7 @@ async function playDay(n, opts = {}) {
     done++;
     money(pay, fast ? '빠른 배송 팁!' : o.ev === 'urgent' ? '⚡ 급한 주문 2배!' : '');
     if (o.ev === 'regular' && o.mistakes === 0) setTimeout(() => { if (!over) money(EVENTS.regular.tip, '⭐ 단골 손님 팁!'); }, 900);
-    shipLog.push({ ev: o.ev || null, seal: o.seal, t: Math.round(total - timeLeft), item: Object.keys(ITEMS).find((k) => ITEMS[k] === o.item), sketch: o.sketch ? 1 : 0, net: o.net ? o.net.id : null, mistakes: o.mistakes });
+    shipLog.push({ ev: o.ev || null, seal: o.seal, t: Math.round(total - timeLeft), item: Object.keys(ITEMS).find((k) => ITEMS[k] === o.item), sketch: o.sketch ? 1 : 0, net: o.net ? o.net.id : null, mistakes: o.mistakes, a: o.area });
     sfx('ok');
     sfx('coin');
     coins(o.mistakes === 0 ? 8 : 4);
@@ -1301,6 +1354,7 @@ async function playDay(n, opts = {}) {
       } else if (broke && before >= 2) comboMsg = ` 📐 ${t.name} 전개도는 콤보에 이미 있던 유형이라 콤보가 1부터 다시 시작해요.`;
       else comboMsg = ` 📐 ${t.name} 전개도! 다음 상자를 다른 유형으로 접으면 콤보 보너스!`;
     }
+    checkContract();
     say((o.mistakes === 0 ? `${o.cust}: "완벽한 상자예요! 고마워요!"` : `${o.cust}: "잘 받았어요!"`) + comboMsg, 'happy');
     orders = orders.filter((x) => x !== o);
     active = null;
@@ -1528,6 +1582,7 @@ async function playDay(n, opts = {}) {
     const pass = stars >= 2;
     if (pass) save.day = Math.max(save.day, n + 1);
     save.best[n] = Math.max(save.best[n] || 0, stars);
+    if (save.offers) delete save.offers[n];
     store();
     sfx(pass ? 'clear' : 'no');
     if (pass) confetti(stars === 3 ? 48 : 28);
@@ -1535,7 +1590,7 @@ async function playDay(n, opts = {}) {
     const rankLi = !tutorial && rankOn() ? h('li', { class: 'rankline' }, save.rank ? '🏆 랭킹에 올리는 중…' : '🏆 시작 화면의 🏆 랭킹에서 닉네임을 만들면 랭킹에 올라가요.') : null;
     if (rankLi && save.rank) {
       if (!rankToken) rankLi.textContent = '🏆 ' + (rankStartMsg || '랭킹 서버와 연결이 안 돼서 이번 기록은 올라가지 않아요.');
-      else call({ act: 'submit', ...rankQ(), day: n, token: rankToken, log: shipLog, earned }).then((r) => {
+      else call({ act: 'submit', ...rankQ(), day: n, token: rankToken, log: shipLog, earned, contract: contract ? contract.id : '' }).then((r) => {
         rankLi.textContent = r.ok ? `🏆 ${n}일차 매출 전체 ${r.myRank}위! (완벽한 상자 ${r.perfect}개 · 최고 콤보 ${r.bestCombo})` : `🏆 ${r.msg}`;
       });
     }
@@ -1548,10 +1603,11 @@ async function playDay(n, opts = {}) {
         h('li', {}, `오늘 매출 ${won(earned)} (목표 ${won(cfg.target)}, 재료 값 뺀 금액)`),
         h('li', {}, `보낸 상자 ${done}개 · 놓친 주문 ${missed}개`),
         h('li', {}, `📐 오늘 만든 전개도 유형 ${netsToday.size}가지 · 최고 콤보 ${bestCombo} · 지금까지 모은 유형 ${Object.keys(save.nets || {}).length}/11`),
+        contract ? h('li', {}, `📜 계약 「${contractText(contract)}」 ${contractDone ? `성공! +${won(contractReward(contract, cfg.target))}` : `${Math.min(contract.need, contractCount(contract, shipLog))}/${contract.need} — 다음에 다시 도전해요`}`) : null,
         left ? h('li', {}, `쓰지 못하고 남은 재료 ${left}개`) : null,
         h('li', {}, `모은 돈 ${won(save.money)}`), rankLi),
       h('div', { class: 'row end wrap' },
-        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); playDay(n); } }, '다시 하기'),
+        h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showTitle(); showIntro(n); } }, '다시 하기'),
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showShop(showTitle); } }, '🛒 상점'),
         pass ? h('button', { class: 'btn', onclick: () => { sfx('click'); showTitle(); showIntro(n + 1); } }, `${n + 1}일차로 ▶`) : null))));
   }
