@@ -535,13 +535,21 @@ export class Factory {
     const sig = { signal: this.ac.signal };
     let down = null;
     el.addEventListener('pointerdown', (e) => {
-      down = { x: e.clientX, y: e.clientY, yaw: this.goal.yaw, pitch: this.goal.pitch, drag: false, id: e.pointerId };
+      if (down && !e.isPrimary) return; // 두 번째 손가락은 무시
+      if (down && down.stroke) this._strokeEnd(down.stroke, true);
+      down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, lt: e.timeStamp, yaw: this.goal.yaw, pitch: this.goal.pitch, drag: false, id: e.pointerId };
+      // 붙일 수 있는 곳에서 끌기 시작하면 '끌어서 붙이기', 다른 곳에서 끌면 둘러보기
+      if (this.strokeKind && this.mode === 'work') {
+        const hit = this._pickStroke(e.clientX, e.clientY);
+        if (hit) down.stroke = new Map();
+      }
       try { el.setPointerCapture(e.pointerId); } catch (_) { /* 무시 */ }
     }, sig);
     el.addEventListener('pointermove', (e) => {
       if (!down || e.pointerId !== down.id) return;
       const dx = e.clientX - down.x, dy = e.clientY - down.y;
-      if (!down.drag && Math.hypot(dx, dy) > 10) down.drag = true;
+      if (!down.drag && Math.hypot(dx, dy) > 10) { down.drag = true; if (down.stroke) this._strokeTo(down, down.x, down.y, 0); }
+      if (down.drag && down.stroke) { this._strokeTo(down, e.clientX, e.clientY, e.timeStamp); return; }
       if (down.drag && this.allowRotate) {
         this.goal.yaw = this.cam.yaw = down.yaw - dx * 0.01;
         this.goal.pitch = this.cam.pitch = Math.max(-0.2, Math.min(1.35, down.pitch + dy * 0.01));
@@ -549,13 +557,72 @@ export class Factory {
     }, sig);
     el.addEventListener('pointerup', (e) => {
       if (!down || e.pointerId !== down.id) return;
-      const tap = !down.drag;
+      const tap = !down.drag, stroke = down.stroke;
       down = null;
+      if (stroke && !tap) { this._strokeEnd(stroke); return; }
       if (tap && this.onTap) this.onTap(this.pick(e.clientX, e.clientY));
       else if (!tap && this.allowRotate && this.onDrag) this.onDrag();
     }, sig);
-    el.addEventListener('pointercancel', () => { down = null; }, sig);
+    el.addEventListener('pointercancel', (e) => { if (!down || e.pointerId !== down.id) return; if (down.stroke) this._strokeEnd(down.stroke, true); down = null; }, sig);
   }
+
+  // 지금 도구로 끌어서 붙일 수 있고, 상자 뒤에 가려지지 않은 곳
+  _pickStroke(cx, cy) {
+    if (!this.pickables.length) return null;
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), this.camera);
+    const hits = ray.intersectObjects(this.pickables, false);
+    if (!hits.length) return null;
+    const face = ray.intersectObjects(this.faceHits, false)[0];
+    const h = hits.find((x) => this.canStroke && this.canStroke(x.object.userData) && (!face || x.distance < face.distance + 0.06));
+    if (!h) return null;
+    const u = h.object.userData, res = { u };
+    if (u.type === 'edge') res.t = Math.max(0, Math.min(1, h.object.worldToLocal(h.point.clone()).y / h.object.geometry.parameters.height + 0.5));
+    return res;
+  }
+  _strokeTo(down, x, y, time) {
+    const dist = Math.hypot(x - down.lx, y - down.ly), n = Math.max(1, Math.ceil(dist / 8));
+    const speed = Math.min(1, dist / Math.max(8, time - down.lt) / 1.2);
+    for (let i = 1; i <= n; i++) {
+      const hit = this._pickStroke(down.lx + (x - down.lx) * i / n, down.ly + (y - down.ly) * i / n);
+      if (!hit) continue;
+      const u = hit.u;
+      if (u.type !== 'edge') { if (this.onStroke) this.onStroke(u); continue; }
+      let s = down.stroke.get(u.edge.id);
+      if (!s) { s = { u, a: hit.t, b: hit.t, mesh: this._previewTape(u.edge) }; down.stroke.set(u.edge.id, s); }
+      s.a = Math.min(s.a, hit.t); s.b = Math.max(s.b, hit.t);
+      this._drawPreview(s);
+      if (this.onStrokeMove) this.onStrokeMove(s.b - s.a, speed);
+      if (s.b - s.a >= 0.72) { down.stroke.delete(u.edge.id); this._dropPreview(s); if (this.onStroke) this.onStroke(u); }
+    }
+    down.lx = x; down.ly = y; down.lt = time;
+  }
+  // 손을 떼면: 거의 다 그은 모서리는 붙이고, 조금만 그은 것은 없던 일로
+  _strokeEnd(map, cancel = false) {
+    map.forEach((s) => {
+      this._dropPreview(s);
+      if (!cancel && s.b - s.a >= 0.45 && this.onStroke && this.canStroke(s.u)) this.onStroke(s.u);
+    });
+    map.clear();
+    if (this.onStrokeEnd) this.onStrokeEnd();
+  }
+  _previewTape(e) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xf6efd9 }));
+    m.visible = false;
+    if (this.rig) this.rig.group.add(m);
+    return m;
+  }
+  _drawPreview(s) {
+    const e = s.u.edge, len = Math.abs(e.b[e.axis] - e.a[e.axis]), ctr = this.A.center;
+    const at = (t) => e.a.map((v, k) => v + (e.b[k] - v) * t);
+    const mid = at((s.a + s.b) / 2);
+    const sc = [0.34, 0.34, 0.34]; sc[e.axis] = Math.max(0.1, len * (s.b - s.a));
+    s.mesh.position.set(...mid.map((v, k) => (k === e.axis ? v : v - Math.sign(v - ctr[k]) * 0.12)));
+    s.mesh.scale.set(...sc);
+    s.mesh.visible = true;
+  }
+  _dropPreview(s) { s.mesh.removeFromParent(); s.mesh.geometry.dispose(); s.mesh.material.dispose(); }
 
   pick(cx, cy) {
     const list = this.mode === 'walk' ? [...this.stationMeshes, this.floor] : this.pickables;
@@ -598,7 +665,23 @@ export class Factory {
     }
   }
 
+  // ---------- 손맛: 흔들림(카메라만), 아주 짧은 멈칫 ----------
+  shake(v) { if (this.shakeOn !== false) this.trauma = Math.min(1, (this.trauma || 0) + v); }
+  freeze(ms) { this.freezeUntil = Math.max(this.freezeUntil || 0, performance.now() + ms); }
+  _squash() {
+    const p = this.pivot;
+    if (!p) return;
+    this.animate(220, (t) => { const s = 1 - 0.1 * Math.sin(t * Math.PI) * (1 - t * 0.4); p.scale.set(1 + (1 - s) * 0.5, s, 1 + (1 - s) * 0.5); }).then(() => p.scale.set(1, 1, 1));
+  }
+
   _step(now, dt) {
+    const raw = now - (this._prevNow || now);
+    this._prevNow = now;
+    if (now < (this.freezeUntil || 0)) { // 멈칫하는 동안은 움직임만 멈춘다(시간과 조작은 그대로)
+      this.anims.forEach((a) => { a.start += raw; });
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
     for (const a of this.anims.slice()) {
       const t = Math.min(1, (now - a.start) / a.ms);
       a.fn(t);
@@ -632,6 +715,13 @@ export class Factory {
     const pos = new THREE.Vector3(Math.sin(c.yaw) * Math.cos(c.pitch), Math.sin(c.pitch), Math.cos(c.yaw) * Math.cos(c.pitch)).multiplyScalar(c.dist).add(c.target);
     this.camera.position.copy(pos);
     this.camera.lookAt(c.target);
+    if (this.trauma > 0) {
+      this.trauma = Math.max(0, this.trauma - dt * 1.6);
+      const s = this.trauma * this.trauma, t = now / 1000 * 30;
+      this.camera.position.x += s * c.dist * 0.012 * Math.sin(t * 1.7);
+      this.camera.position.y += s * c.dist * 0.01 * Math.sin(t * 2.3);
+      this.camera.rotateZ(s * 0.02 * Math.sin(t * 1.1));
+    }
     if (this.beltMoving) this.beltTex.offset.x -= dt * 1.6;
     if (this.bulbs) { const tt = now / 400; this.bulbs.forEach((b, i) => { b.visible = Math.sin(tt + i * 1.7) > -0.6; }); }
     if (this.flags) { const tt = now / 300; this.flags.forEach((f, i) => { f.rotation.x = Math.sin(tt + i * 0.8) * 0.35; }); }
@@ -784,6 +874,8 @@ export class Factory {
       this.pivot.position.y = startH + (newHalf - startH) * e + Math.sin(t * Math.PI) * Math.max(...this.A.dims) * 0.5;
     });
     this.pivot.position.y = newHalf;
+    this.shake(0.5);
+    this._squash();
   }
 
   // 굴리는 방향(◀▶▲▼)의 회전축(월드). 상자는 이 축으로 90° 돈다
@@ -827,6 +919,8 @@ export class Factory {
     this.pivot.quaternion.copy(q1);
     this.pivot.position.y = hy;
     this.rolling = false;
+    this.shake(0.22);
+    this._squash();
   }
 
   // ---------- 포장 준비: 모서리·꼭짓점·면 ----------
@@ -893,6 +987,7 @@ export class Factory {
 
   // 지금 쓰는 도구에 맞는 것만 누를 수 있게
   setTool(tool) {
+    this.strokeKind = tool === 'tape' || tool === 'guard' || tool === 'foil' ? tool : null; // 스티커는 잘못 붙이면 버리게 되므로 누르기만
     this.pickables = tool === 'tape' ? this.edgeHits : tool === 'guard' ? this.cornerHits : ['base', 'side', 'foil', 'up'].includes(tool) ? this.faceHits : [];
   }
 
@@ -987,7 +1082,7 @@ export class Factory {
     return new THREE.MeshPhongMaterial({ map: t, shininess: 60, specular: 0x444444, transparent: true, opacity: 0.96 });
   }
 
-  addTape(e) {
+  addTape(e, grow = false) {
     const a = new THREE.Vector3(...e.a), b = new THREE.Vector3(...e.b);
     const len = a.distanceTo(b);
     const g = new THREE.Group();
@@ -1008,6 +1103,7 @@ export class Factory {
       g.add(m);
     });
     this.rig.group.add(g);
+    if (grow) this.animate(170, (t) => { const k = 1 - (1 - t) ** 3; g.children.forEach((m) => { m.scale.setComponent(e.axis, Math.max(0.02, k)); }); });
     return g;
   }
 
@@ -1072,7 +1168,7 @@ export class Factory {
   }
 
   async openDoor() { if (!this.shutter || this.doorOpen >= 1) return; const a = this.doorOpen; await this.animate(600, (t) => this._setDoor(a + (1 - a) * t)); }
-  async closeDoor() { if (!this.shutter || this.doorOpen <= 0) return; const a = this.doorOpen; await this.animate(600, (t) => this._setDoor(a * (1 - t))); }
+  async closeDoor() { if (!this.shutter || this.doorOpen <= 0) return; const a = this.doorOpen; await this.animate(600, (t) => this._setDoor(a * (1 - t))); if (this.alive) { this.shake(0.3); if (this.onDoor) this.onDoor(); } }
 
   _stackCargo() {
     if (!this.cargo) return;

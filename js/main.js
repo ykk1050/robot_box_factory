@@ -1,10 +1,11 @@
 // 로봇 상자 공장 — 택배 주문을 받아 상자를 만들고 트럭에 실어 보내는 경영 게임
 import { ITEMS, CUSTOMERS, COST, BAG, EVENTS, GLUE_CHANCE, GLUE_HINT, OUTFITS, DECOR, DECOR_ONE, dayConfig, UPGRADES, payFor } from './data.js';
+import { sfx, pip, chime, coin, comboSound, tick, tapeStart, tapeMove, tapeStop, setAudio, music } from './sound.js';
 import { RANK_URL, RANK_ALL, TEST, rankOn, CATS, call } from './rank.js';
 import { NICK, NICK_WORDS, NICK_STEPS } from './nickwords.js';
 
 // 게임 버전은 index.html의 window.BUILD 하나에서 고친다(+0.001). 파일 캐시 갱신에도 같은 값을 쓴다.
-export const VERSION = window.BUILD || 'v1.031';
+export const VERSION = window.BUILD || 'v1.032';
 
 // 3D·전개도 모듈은 근무를 시작할 때 불러온다(시작 화면이 3D 라이브러리를 기다리지 않게)
 let analyzeNet, netBoundary, netLines, Cutter, boxPicture, sketchPicture, STATIONS, classifyNet, NET_TYPES, NET_GROUPS, netTypePicture;
@@ -57,11 +58,11 @@ if (save.rank && !NICK.parse(save.rank.nick)) delete save.rank;
 function store() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (_) { /* 무시 */ } }
 
 // ---------- 소리 ----------
-const VOL = { click: 0.5, ok: 0.6, no: 0.5, thud: 0.7, tape: 0.7, fold: 0.6, robot: 0.35, clear: 0.6 };
-function sfx(name) {
-  if (!save.sound) return;
-  try { const a = new Audio(`sounds/${name}.mp3`); a.volume = VOL[name] ?? 0.6; a.play().catch(() => {}); } catch (_) { /* 무시 */ }
-}
+// 소리는 sound.js. 음악·흔들림은 따로 끌 수 있다(기기에서 '동작 줄이기'를 켰으면 흔들림은 처음부터 꺼짐)
+const CALM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+if (save.music == null) save.music = true;
+if (save.shake == null) save.shake = !CALM;
+setAudio({ sound: save.sound, music: save.music });
 
 // ---------- DOM ----------
 function h(tag, attrs = {}, ...kids) {
@@ -84,15 +85,30 @@ function creditLine() {
   return h('p', { class: 'credit-line' }, `Created by gamtudyssam using AI · ${VERSION} · `,
     h('a', { href: 'credits.html', target: '_blank', rel: 'noopener' }, '출처와 라이선스'));
 }
-function soundBtn() {
-  const b = h('button', { class: 'btn ghost small', onclick: () => { save.sound = !save.sound; store(); b.textContent = save.sound ? '🔊 소리 켬' : '🔇 소리 끔'; sfx('click'); } }, save.sound ? '🔊 소리 켬' : '🔇 소리 끔');
+// 설정 버튼 세 개: 소리 · 음악 · 흔들림
+function settingBtns(onChange) {
+  const mk = (key, onT, offT) => {
+    const b = h('button', { class: 'btn ghost small', onclick: () => { save[key] = !save[key]; store(); b.textContent = save[key] ? onT : offT; setAudio({ sound: save.sound, music: save.music }); sfx('click'); if (onChange) onChange(); } }, save[key] ? onT : offT);
+    return b;
+  };
+  return h('div', { class: 'row center wrap' }, mk('sound', '🔊 소리 켬', '🔇 소리 끔'), mk('music', '🎵 음악 켬', '🎵 음악 끔'), mk('shake', '📳 흔들림 켬', '📳 흔들림 끔'));
+}
+// 길게 누르면 점점 빨리 반복되는 버튼 (누르자마자 한 번, 0.35초 뒤부터 반복)
+function holdBtn(attrs, fn, label) {
+  let t = null, n = 0;
+  const stop = () => { clearTimeout(t); t = null; };
+  const again = () => { if (!b.isConnected) { stop(); return; } fn(); n++; t = setTimeout(again, n < 6 ? 110 : 60); };
+  const b = h('button', { ...attrs,
+    onpointerdown: (e) => { if (e.button) return; stop(); n = 0; fn(); t = setTimeout(again, 350); try { b.setPointerCapture(e.pointerId); } catch (_) { /* 무시 */ } },
+    onpointerup: stop, onpointercancel: stop, onlostpointercapture: stop, oncontextmenu: (e) => e.preventDefault(),
+    onclick: (e) => { if (e.detail === 0) fn(); } }, label); // 키보드로 누를 때(detail 0)
   return b;
 }
 function stepper(value, min, max, onChange, unit = '') {
   let v = value;
   const num = h('span', { class: 'snum' }, `${v}${unit}`);
-  const set = (n) => { v = Math.max(min, Math.min(max, n)); num.textContent = `${v}${unit}`; onChange(v); sfx('click'); };
-  return h('span', { class: 'stepper' }, h('button', { class: 'sbtn', onclick: () => set(v - 1) }, '−'), num, h('button', { class: 'sbtn', onclick: () => set(v + 1) }, '+'));
+  const set = (n) => { const w = Math.max(min, Math.min(max, n)); if (w === v) return; v = w; num.textContent = `${v}${unit}`; onChange(v); sfx('click', { rate: 1 + Math.min(v, 12) * 0.03 }); };
+  return h('span', { class: 'stepper' }, holdBtn({ class: 'sbtn', 'aria-label': '하나 줄이기' }, () => set(v - 1), '−'), num, holdBtn({ class: 'sbtn', 'aria-label': '하나 늘리기' }, () => set(v + 1), '+'));
 }
 
 const markIcons = (item) => (item.fragile ? ' · 🛡' : '') + (item.cold ? ' · 🧊' : '') + (item.up ? ' · ⬆️' : '');
@@ -365,16 +381,20 @@ async function playDay(n, opts = {}) {
   const cutWrap = h('div', { class: 'cutter hidden' });
   const panel = h('div', { class: 'stpanel hidden' });
   const fx = h('div', { class: 'fx' });
-  const rollBtn = (dir, label, aria) => h('button', { class: 'rbtn r-' + dir, 'aria-label': aria, onclick: () => { if (F.rolling || tutBlock('roll')) return; sfx('thud'); F.roll(dir); hiddenSeen.clear(); tutEv('roll'); tutDemoNow(); } }, label);
+  const juice = h('div', { class: 'juice', 'aria-hidden': 'true' });
+  const rollBtn = (dir, label, aria) => h('button', { class: 'rbtn r-' + dir, 'aria-label': aria, onclick: () => { if (F.rolling || tutBlock('roll')) return; sfx('thud', { rate: 0.94 + Math.random() * 0.12 }); F.roll(dir); hiddenSeen.clear(); tutEv('roll'); tutDemoNow(); } }, label);
   const rollPad = h('div', { class: 'rollpad hidden' },
     rollBtn('up', '▲', '상자를 멀리 굴리기'), rollBtn('left', '◀', '상자를 왼쪽으로 굴리기'),
     h('span', { class: 'rmid' }, '상자', h('br'), '굴리기'),
     rollBtn('right', '▶', '상자를 오른쪽으로 굴리기'), rollBtn('down', '▼', '상자를 앞으로 굴리기'));
-  const root = h('div', { class: 'screen play' }, gl, hud, leftCol, side, cutWrap, panel, rollPad, robot, nav, fx);
+  const root = h('div', { class: 'screen play' }, gl, hud, leftCol, side, cutWrap, panel, rollPad, robot, nav, fx, juice);
   if (tutorial) root.classList.add('tut');
   app.append(root);
   const F = new Factory(gl, { character: (OUTFITS.find((o) => o.id === save.char) || OUTFITS[0]).model, walkSpeed: save.up.shoes ? 3.5 : 2.2, decor: save.decor || {}, netTypes: NET_TYPES });
   // 근무 시작: 공장 전체를 잠깐 비춘 뒤 기사에게 다가간다 (꾸민 공장도 한눈에)
+  F.shakeOn = save.shake;
+  F.onDoor = () => sfx('door');
+  music.start();
   F.view('tour');
   setTimeout(() => { if (F.alive && F.mode === 'walk' && !F.follow) F.view('follow'); }, 2400);
 
@@ -701,6 +721,36 @@ async function playDay(n, opts = {}) {
     timeTxt.textContent = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
     earnEl.textContent = `💰 ${won(earned)} / ${won(cfg.target)}`;
     doneEl.textContent = `📦 ${done}`;
+    if (!tutorial && !goalHit && earned >= cfg.target) { goalHit = true; setTimeout(() => { if (!over) { banner('🎯 목표 달성!'); sfx('goal'); confetti(26); } }, 900); }
+  }
+  // ---------- 손맛: 도장·색종이·동전 ----------
+  let goalHit = false;
+  const bump = (el) => { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); };
+  const gone = (el, ms) => { juice.append(el); setTimeout(() => el.remove(), ms); };
+  function banner(t) { juice.querySelectorAll('.jbanner').forEach((x) => x.remove()); gone(h('div', { class: 'jbanner' }, t), 1700); }
+  function stampMark(perfect) {
+    sfx('stamp', { rate: perfect ? 1 : 1.15, vol: perfect ? 1 : 0.7 });
+    if (save.shake) F.freeze(90);
+    gone(h('div', { class: 'jstamp' + (perfect ? ' perfect' : '') }, perfect ? '완벽 포장' : '검수 합격', perfect ? h('small', {}, '★ ★ ★') : null), 1300);
+  }
+  function confetti(n) {
+    if (CALM || !save.shake) n = Math.min(n, 8); // 흔들림을 끈 사람에게는 조금만
+    const cols = ['#e94f4f', '#f4b942', '#6bcb77', '#4d96ff', '#c77dff', '#ff8fab'];
+    const box = h('div', { class: 'jconf' });
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 240;
+      box.append(h('i', { style: `background:${cols[i % cols.length]};--x:${Math.round(Math.cos(a) * d)}px;--y:${Math.round(Math.sin(a) * d * 0.6 - 120)}px;--r:${Math.round(Math.random() * 900 - 450)}deg;animation-delay:${Math.round(Math.random() * 120)}ms` }));
+    }
+    gone(box, 1900);
+  }
+  function coins(n) {
+    const to = earnEl.getBoundingClientRect(), from = juice.getBoundingClientRect();
+    const x = to.left + 24 - (from.left + from.width / 2), y = to.top + to.height / 2 - (from.top + from.height * 0.45);
+    for (let i = 0; i < n; i++) {
+      const c = h('span', { class: 'jcoin', style: `--x:${Math.round(x)}px;--y:${Math.round(y)}px;--w:${Math.round(Math.random() * 120 - 60)}px;animation-delay:${i * 70}ms` }, '₩');
+      gone(c, 900 + i * 70);
+      setTimeout(() => { if (!over) { coin(i); bump(earnEl); } }, 620 + i * 70);
+    }
   }
 
   // ---------- 가는 곳 ----------
@@ -744,6 +794,17 @@ async function playDay(n, opts = {}) {
     markNav();
   }
   F.onDrag = () => { hiddenSeen.clear(); tutEv('drag'); tutDemoNow(); };
+  F.canStroke = (u) => {
+    const o = active;
+    if (!o || o.phase !== 'packing' || place !== 'work' || over || paused) return false;
+    if (tool === 'tape' && u.type === 'edge') return !o.taped.has(u.edge.id) && (inv.tape[u.edge.len] > 0 || inv.roll >= u.edge.len);
+    if (tool === 'guard' && u.type === 'corner') return !!o.item.fragile && !o.guarded.has(u.id) && inv.guard > 0;
+    if (tool === 'foil' && u.type === 'face') return !!o.item.cold && !o.foilS.has(u.id) && inv.foil > 0;
+    return false;
+  };
+  F.onStroke = (u) => { if (F.canStroke(u)) useTool(u, true); };
+  F.onStrokeMove = (p, speed) => { tapeStart(); tapeMove(p, speed); };
+  F.onStrokeEnd = () => tapeStop();
   F.onTap = (hit) => {
     if (!hit || over || paused) return;
     if (F.mode === 'walk') {
@@ -1101,7 +1162,7 @@ async function playDay(n, opts = {}) {
   }
 
   function hintTool() {
-    if (tool === 'tape') say('테이프를 붙일 모서리를 눌러요. 모서리는 면과 면이 만나는 선분이에요. 그 모서리의 길이와 같은 테이프가 필요해요.');
+    if (tool === 'tape') say('모서리를 손가락으로 쓱 그어서 테이프를 붙여요. 눌러도 붙어요. 모서리는 면과 면이 만나는 선분이에요. 그 모서리의 길이와 같은 테이프가 필요해요.');
     else if (tool === 'guard') say('보호대를 끼울 꼭짓점을 눌러요. 꼭짓점은 모서리와 모서리가 만나는 점이에요.');
     else if (tool === 'base') say('밑면 스티커(쌓는 면)는 밑면에 붙여요. 창고에서는 밑면끼리 맞닿게 상자를 쌓아요. 직육면체에서 서로 평행한 두 면이 밑면이에요. 파란 "밑면" 도장이 찍힌 면과, 그 면과 평행한 면을 찾아요.');
     else if (tool === 'side') say('옆면 스티커는 옆면에 붙여요. 옆면은 밑면과 만나는 면이고, 밑면과 수직이에요.');
@@ -1109,7 +1170,15 @@ async function playDay(n, opts = {}) {
     else if (tool === 'up') say('⬆️ 화살표 스티커는 옆면에 붙이면 밑면의 반대쪽(위)을 가리켜요. 밑면과 수직인 옆면을 찾아요.');
   }
 
-  function useTool(hit) {
+  // 붙일 때마다 한 음씩 올라가고, 다 붙이면 화음
+  function stuck(n, all, label) {
+    pip(n);
+    const f = h('div', { class: 'jcount' }, `${n}/${all}`);
+    juice.querySelectorAll('.jcount').forEach((x) => x.remove());
+    gone(f, 700);
+    if (n === all) { setTimeout(chime, 120); banner(label); }
+  }
+  function useTool(hit, stroke = false) {
     const o = active;
     if (!o || o.phase !== 'packing') return;
     if (!tool) { say('먼저 오른쪽에서 도구를 골라요.'); return; }
@@ -1118,7 +1187,8 @@ async function playDay(n, opts = {}) {
       if (o.taped.has(e.id)) { say(o.seal === 'glue' ? (e.hinge ? '접힌 모서리라 붙일 필요가 없어요.' : '이 모서리는 본드로 붙였어요.') : '이 모서리는 벌써 붙였어요.'); return; }
       if (!inv.tape[e.len] && inv.roll >= e.len) {
         inv.roll -= e.len;
-        o.taped.add(e.id); F.addTape(e); sfx('tape');
+        o.taped.add(e.id); F.addTape(e, !stroke); if (!stroke) sfx('tape', { rate: 0.95 + Math.random() * 0.1 });
+        stuck(o.taped.size, 12, '모서리 12개 완성!');
         drawWorkSide(); tutEv('use'); tutDemoNow();
         if (inv.roll < 1) say('🧻 테이프 롤을 다 썼어요.');
         return;
@@ -1131,17 +1201,20 @@ async function playDay(n, opts = {}) {
         return;
       }
       inv.tape[e.len]--;
-      o.taped.add(e.id); F.addTape(e); sfx('tape');
+      o.taped.add(e.id); F.addTape(e, !stroke); if (!stroke) sfx('tape', { rate: 0.95 + Math.random() * 0.1 });
+      stuck(o.taped.size, 12, '모서리 12개 완성!');
     } else if (tool === 'guard' && hit.type === 'corner') {
       if (!o.item.fragile) { say('이 물건은 깨지지 않아서 보호대가 필요 없어요.'); return; }
       if (o.guarded.has(hit.id)) { say('이 꼭짓점에는 벌써 끼웠어요.'); return; }
       if (inv.guard <= 0) { say('보호대가 없어요. 포장재 선반에서 가져와요.', 'sad'); sfx('no'); return; }
       inv.guard--; o.guarded.add(hit.id); F.addGuard(hit); sfx('click');
+      stuck(o.guarded.size, 8, '꼭짓점 8개 완성!');
     } else if (tool === 'foil' && hit.type === 'face') {
       if (!o.item.cold) { say('이 물건은 차갑게 보내지 않아서 보냉 은박이 필요 없어요.'); return; }
       if (o.foilS.has(hit.id)) { say('이 면에는 벌써 은박을 붙였어요.'); return; }
       if (inv.foil <= 0) { say('보냉 은박이 없어요. 포장재 선반에서 가져와요.', 'sad'); sfx('no'); return; }
       inv.foil--; o.foilS.add(hit.id); F.addFoil(hit); sfx('tape');
+      stuck(o.foilS.size, 6, '면 6개 완성!');
     } else if (tool === 'up' && hit.type === 'face') {
       if (!o.item.up) { say('이 물건은 "이쪽이 위" 표시가 필요 없어요.'); return; }
       if (o.upS.has(hit.id)) { say('이 면에는 벌써 화살표가 있어요.'); return; }
@@ -1149,6 +1222,7 @@ async function playDay(n, opts = {}) {
       inv.up--;
       if (hit.role !== 'side') { oops('여기는 밑면이에요! 화살표는 밑면과 수직인 옆면에 붙여야 위쪽을 가리킬 수 있어요. (스티커 버림)', 0); drawWorkSide(); return; }
       o.upS.add(hit.id); F.addUpArrow(hit); sfx('tape');
+      stuck(o.upS.size, 4, '옆면 4개 완성!');
     } else if ((tool === 'base' || tool === 'side') && hit.type === 'face') {
       const isBase = hit.role === 'base' || hit.role === 'base2';
       const want = tool === 'base';
@@ -1163,6 +1237,7 @@ async function playDay(n, opts = {}) {
       }
       set.add(hit.id);
       F.addSticker(hit, want ? 'stack' : 'care', o.cust); sfx('tape');
+      stuck(set.size, want ? 2 : 4, want ? '밑면 2개 완성!' : '옆면 4개 완성!');
     } else return;
     drawWorkSide();
     tutEv('use');
@@ -1191,6 +1266,7 @@ async function playDay(n, opts = {}) {
     rollPad.classList.add('hidden');
     F.allowRotate = false; F.mode = 'busy'; F.pickables = [];
     setSide(h('p', { class: 'hint' }, '출고 중…'));
+    stampMark(o.mistakes === 0);
     sfx('robot');
     F.view('ship');
     await F.ship();
@@ -1204,6 +1280,9 @@ async function playDay(n, opts = {}) {
     if (o.ev === 'regular' && o.mistakes === 0) setTimeout(() => { if (!over) money(EVENTS.regular.tip, '⭐ 단골 손님 팁!'); }, 900);
     shipLog.push({ ev: o.ev || null, seal: o.seal, t: Math.round(total - timeLeft), item: Object.keys(ITEMS).find((k) => ITEMS[k] === o.item), sketch: o.sketch ? 1 : 0, net: o.net ? o.net.id : null, mistakes: o.mistakes });
     sfx('ok');
+    sfx('coin');
+    coins(o.mistakes === 0 ? 8 : 4);
+    if (o.mistakes === 0) confetti(Math.min(48, 18 + netChain.length * 6));
     let comboMsg = '';
     if (o.net) {
       const t = o.net;
@@ -1215,6 +1294,8 @@ async function playDay(n, opts = {}) {
       if (!tutorial) { save.nets = { ...(save.nets || {}), [t.id]: true }; store(); }
       const bonus = comboBonus(netChain.length);
       if (bonus) {
+        comboSound(netChain.length); bump(comboEl);
+        if (netChain.length >= 3) banner(`📐 콤보 ×${netChain.length}`);
         setTimeout(() => { if (!over || tutorial) money(bonus, `📐 전개도 콤보 ×${netChain.length}!`); }, 600);
         comboMsg = ` 📐 ${t.name} 전개도로 콤보 ${netChain.length}! 보너스 +${won(bonus)}`;
       } else if (broke && before >= 2) comboMsg = ` 📐 ${t.name} 전개도는 콤보에 이미 있던 유형이라 콤보가 1부터 다시 시작해요.`;
@@ -1277,7 +1358,7 @@ async function playDay(n, opts = {}) {
           const num = h('span', { class: 'snum big' }, '0cm');
           const sum = h('p', { class: 'sum' });
           const set = (v) => { L = Math.max(0, Math.min(300, v)); num.textContent = `${L}cm`; sum.textContent = `재료 값 ${won(L * COST.roll)} (자를 때보다 싸요)`; sfx('click'); };
-          const b = (d) => h('button', { class: 'sbtn wide', onclick: () => set(L + d) }, d > 0 ? `+${d}` : `${d}`);
+          const b = (d) => holdBtn({ class: 'sbtn wide' }, () => set(L + d), d > 0 ? `+${d}` : `${d}`);
           body.append(h('p', { class: 'hint' }, `붙일 모서리 길이를 모두 더한 만큼 롤로 뽑아요. 모서리에 붙일 때마다 그 길이만큼 잘려 나가요. 모서리 12개를 하나하나 더하지 않고 빨리 구하는 방법은 없을까요? (1cm에 ${won(COST.roll)})`),
             h('div', { class: 'srow center' }, b(-10), b(-1), num, b(1), b(10)),
             sum,
@@ -1370,6 +1451,7 @@ async function playDay(n, opts = {}) {
     const now = performance.now();
     const dt = Math.min(1, (now - lastT) / 1000);
     lastT = now;
+    music.duck(paused);
     if (paused || over) return;
     if (tutorial) {
       // 연습: 시간이 흐르지 않고 주문은 하나만
@@ -1377,8 +1459,11 @@ async function playDay(n, opts = {}) {
       drawTickets(); tutGlow();
       return;
     }
+    const before = timeLeft;
     timeLeft -= dt;
     spawnIn -= dt;
+    music.hurry(timeLeft < 30);
+    if (timeLeft < 10 && timeLeft > 0 && Math.ceil(before) !== Math.ceil(timeLeft)) tick();
     if (spawnIn <= 0 && orders.length < 3 && timeLeft > 40) { spawn(); spawnIn = cfg.every; }
     for (const o of orders.slice()) {
       o.left -= dt * (o === active ? 0.5 : 1);
@@ -1421,7 +1506,7 @@ async function playDay(n, opts = {}) {
         tutorial ? null : h('button', { class: 'btn ghost', onclick: () => { sfx('click'); ov.remove(); openDecor(pause); } }, '🎨 공장 꾸미기'),
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); playDay(n, opts); } }, tutorial ? '연습 처음부터' : '오늘 처음부터'),
         h('button', { class: 'btn ghost', onclick: () => { sfx('click'); showTitle(); } }, '처음 화면'),
-        soundBtn()),
+        settingBtns(() => { F.shakeOn = save.shake; })),
       creditLine()));
     root.append(ov);
   }
@@ -1430,6 +1515,7 @@ async function playDay(n, opts = {}) {
     if (over) return;
     over = true;
     clearInterval(timer);
+    music.stop(); tapeStop();
     closeAll();
     F.onTap = null;
     F.clearWork();
@@ -1444,6 +1530,7 @@ async function playDay(n, opts = {}) {
     save.best[n] = Math.max(save.best[n] || 0, stars);
     store();
     sfx(pass ? 'clear' : 'no');
+    if (pass) confetti(stars === 3 ? 48 : 28);
     // 랭킹에 올리기: 점수 대신 출고 기록을 보내고, 서버가 다시 계산해서 순위를 알려 준다
     const rankLi = !tutorial && rankOn() ? h('li', { class: 'rankline' }, save.rank ? '🏆 랭킹에 올리는 중…' : '🏆 시작 화면의 🏆 랭킹에서 닉네임을 만들면 랭킹에 올라가요.') : null;
     if (rankLi && save.rank) {
@@ -1470,7 +1557,7 @@ async function playDay(n, opts = {}) {
   }
 
   if (tutorial) root.append(hand);
-  cleanup = () => { over = true; clearInterval(timer); clearTimeout(demoTimer); F.dispose(); };
+  cleanup = () => { over = true; music.stop(); tapeStop(); clearInterval(timer); clearTimeout(demoTimer); F.dispose(); };
   setSideIdle();
   drawHud();
   drawTickets();
@@ -1480,7 +1567,7 @@ async function playDay(n, opts = {}) {
   if (TEST) window.__game = { F, inv, get place() { return place; }, get active() { return active; }, get orders() { return orders; }, pick: pickOrder, get cutter() { return cutter; }, doCut, get tutStep() { return tutStep; }, tutDemo: () => tutDemo(), get netChain() { return netChain; }, goTo, useTool, tryShip, endDay, setTime: (t) => { timeLeft = t; } }; // 점검 봇(?test=1)에서만 게임 속을 연다
 }
 
-if (TEST) window.__factory = { save, showTitle, playDay, showShop }; // F12에서 게임을 조작하지 못하게, 점검 봇(?test=1)에서만 연다
+if (TEST) window.__factory = { save, showTitle, playDay, showShop, music }; // F12에서 게임을 조작하지 못하게, 점검 봇(?test=1)에서만 연다
 try { sessionStorage.removeItem('rbf-reload'); } catch (_) { /* 무시 */ }
 showTitle();
 setTimeout(() => loadWork().catch(() => {}), 600);

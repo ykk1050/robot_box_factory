@@ -12,7 +12,7 @@ export const ITEMS = {
   robot: { name: '로봇 장난감', emoji: '🤖', d: [3, 4, 2], color: '#80cbc4' },
   book: { name: '동화책', emoji: '📚', d: [5, 1, 4], color: '#ffcc80' },
   phone: { name: '휴대폰', emoji: '📱', d: [3, 1, 5], color: '#b0bec5', fragile: true },
-  plant: { name: '작은 화분', emoji: '🪴', d: [2, 3, 2], color: '#a5d6a7', fragile: true, up: true },
+  plant: { name: '작은 화분', emoji: '🌵', d: [2, 3, 2], color: '#a5d6a7', fragile: true, up: true },
   bear: { name: '곰 인형', emoji: '🧸', d: [4, 3, 4], color: '#d7a77a' },
   cake: { name: '케이크', emoji: '🎂', d: [4, 2, 4], color: '#f8bbd0', fragile: true, cold: true },
   globe: { name: '지구본', emoji: '🌍', d: [4, 4, 4], color: '#81d4fa', fragile: true },

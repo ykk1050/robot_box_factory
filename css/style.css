@@ -182,6 +182,7 @@ button { font: inherit; color: inherit; }
 .stepper { display: inline-flex; align-items: center; gap: 4px; }
 .sbtn { width: 48px; height: 48px; border-radius: 12px; border: 2px solid var(--line); background: #fff; font-size: 24px; cursor: pointer; }
 .sbtn:active { background: #eee; }
+.sbtn { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .snum { min-width: 58px; text-align: center; font-family: "Jua", sans-serif; font-size: 22px; }
 .sum { font-family: "Jua", sans-serif; color: var(--teal-d); font-size: 17px; margin: 6px 0; }
 
@@ -369,3 +370,35 @@ button { font: inherit; color: inherit; }
   .play:not(.cutting) .tickets .ticket.empty { display: none; }
   .rollpad { bottom: calc(30% + 152px); }
 }
+
+/* 손맛: 도장·색종이·동전·글자 */
+.juice { position: absolute; inset: 0; z-index: 24; pointer-events: none; overflow: hidden; }
+.jstamp { position: absolute; left: 50%; top: 45%; padding: 10px 26px; border: 8px solid #2f6fde; border-radius: 18px; color: #2f6fde; background: #fffdf6cc; font-family: "Jua", sans-serif; font-size: 46px; line-height: 1.1; text-align: center; white-space: nowrap; animation: jstamp 1.25s forwards; }
+.jstamp.perfect { border-color: #d63b2f; color: #d63b2f; font-size: 60px; }
+.jstamp small { display: block; font-size: 26px; }
+@keyframes jstamp {
+  0% { transform: translate(-50%, -50%) rotate(-12deg) scale(2.6); opacity: 0; }
+  14% { transform: translate(-50%, -50%) rotate(-12deg) scale(0.92); opacity: 1; }
+  22%, 78% { transform: translate(-50%, -50%) rotate(-12deg) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -62%) rotate(-12deg) scale(1); opacity: 0; }
+}
+.jbanner { position: absolute; left: 50%; top: 26%; font-family: "Jua", sans-serif; font-size: 40px; color: #b55e1f; text-shadow: 0 3px 0 #fff, 0 0 10px #fff, 0 0 16px #fff; white-space: nowrap; animation: jbanner 1.6s forwards; }
+@keyframes jbanner {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  18% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+  28%, 72% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -110%) scale(1); opacity: 0; }
+}
+.jcount { position: absolute; left: 50%; top: 36%; font-family: "Jua", sans-serif; font-size: 30px; color: #23706c; text-shadow: 0 2px 0 #fff, 0 0 8px #fff; animation: jcount 0.65s forwards; }
+@keyframes jcount { 0% { transform: translate(-50%, 0) scale(0.6); opacity: 0; } 25% { transform: translate(-50%, 0) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -26px) scale(1); opacity: 0; } }
+.jconf { position: absolute; left: 50%; top: 45%; }
+.jconf i { position: absolute; width: 11px; height: 16px; border-radius: 2px; opacity: 0; animation: jconf 1.6s cubic-bezier(0.15, 0.7, 0.4, 1) forwards; }
+@keyframes jconf { 0% { transform: translate(0, 0); opacity: 1; } 55% { transform: translate(var(--x), var(--y)) rotate(var(--r)); opacity: 1; } 100% { transform: translate(var(--x), calc(var(--y) + 260px)) rotate(calc(var(--r) * 1.6)); opacity: 0; } }
+.jcoin { position: absolute; left: 50%; top: 45%; width: 30px; height: 30px; line-height: 26px; text-align: center; border-radius: 50%; background: #ffd24a; border: 2px solid #c98a12; color: #9a6508; font-weight: bold; font-size: 17px; opacity: 0; animation: jcoin 0.75s cubic-bezier(0.5, 0, 0.8, 0.6) forwards; }
+@keyframes jcoin { 0% { transform: translate(0, 0) scale(0.5); opacity: 1; } 35% { transform: translate(var(--w), -50px) scale(1.2); opacity: 1; } 100% { transform: translate(var(--x), var(--y)) scale(0.7); opacity: 1; } }
+.bump { animation: bump 0.28s; }
+@keyframes bump { 40% { transform: scale(1.14); } }
+.tbar.hurry { animation: hurry 1s ease-in-out infinite alternate; }
+@keyframes hurry { to { box-shadow: 0 0 0 3px #d63b2f88; } }
+@media (max-width: 520px) { .jstamp { font-size: 34px; border-width: 6px; } .jstamp.perfect { font-size: 42px; } .jbanner { font-size: 28px; } }
+@media (prefers-reduced-motion: reduce) { .tbar.hurry, .bump { animation: none; } }

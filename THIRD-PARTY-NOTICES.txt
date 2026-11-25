@@ -38,8 +38,8 @@ Universal Animation Library by Quaternius (https://quaternius.com), CC0 1.0
 효과음 (Kenney) — CC0 1.0
 ==============================================================================
 효과음: Kenney (www.kenney.nl), CC0 1.0
-사용한 소리: Interface Sounds(click_003, confirmation_001, error_007), Impact Sounds(impactPlank_medium_001),
-RPG Audio(cloth1, cloth4), Sci-fi Sounds(forceField_001), Music Jingles(jingles_PIZZI02) — mp3로 바꿔 사용
+사용한 소리: Interface Sounds(click_003, confirmation_001, error_007), Impact Sounds(impactPlank_medium_001, impactPlank_medium_002),
+RPG Audio(cloth1, cloth4, handleCoins, doorClose_1), Sci-fi Sounds(forceField_001), Music Jingles(jingles_PIZZI02, jingles_STEEL02) — mp3로 바꿔 사용
 라이선스: https://creativecommons.org/publicdomain/zero/1.0/
 
 ==============================================================================
