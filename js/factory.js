@@ -199,12 +199,6 @@ export class Factory {
       leg.position.set(x, (TABLE_Y - 0.06) / 2, 0);
       s.add(leg);
     }
-    const boxMat = new THREE.MeshLambertMaterial({ color: 0xc99560 });
-    [[-4.4, -3.2, 0.6, 0.5, 0.5], [-3.8, -3.3, 0.5, 0.4, 0.6], [-4.1, -3.25, 0.45, 0.45, 0.45, 0.5]].forEach(([x, z, w, h, d, y = 0]) => {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), boxMat);
-      b.position.set(x, y + h / 2, z);
-      s.add(b);
-    });
     this.truckLoad = 0;
   }
 
@@ -461,6 +455,11 @@ export class Factory {
     put('rooted-gantry-arm-f35c8f', -1.6, 0, -2.4, 0.5);
     put('timber-eur-pallet-a1f655', 2.0, 0, -2.6);
     put('material-pallet-6af263', 3.5, 0, -2.7, 0.3);
+    // KayKit 택배 상자(CC0): 출고를 기다리는 상자 더미 두 곳 (기사가 다니는 길 바깥, 걸으며 늘 보이는 자리)
+    const kk = (f, x, y, z, ry, sc = 0.9) => put(`kaykit-${f}`, x, y, z, ry).then((g) => { if (g) g.scene.scale.setScalar(sc); });
+    kk('Pallet_Large', 1.35, 0, -1.55, 0.15, 0.35); // 컨베이어 뒤 팔레트 위
+    kk('Box_C', 1.2, 0.175, -1.6, 0.15); kk('Box_B', 1.62, 0.175, -1.42, 0.5); kk('Box_A', 1.25, 0.535, -1.62, -0.2);
+    kk('Box_B', -4.55, 0, 1.25, 1.2); kk('Box_A', -4.5, 0.36, 1.22, 0.4); // 스티커 제작기 옆
   }
 
   // ---------- 일꾼 ----------

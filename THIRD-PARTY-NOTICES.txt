@@ -35,6 +35,15 @@ Universal Animation Library by Quaternius (https://quaternius.com), CC0 1.0
 라이선스: https://creativecommons.org/publicdomain/zero/1.0/
 
 ==============================================================================
+3D 소품 (KayKit) — CC0 1.0
+==============================================================================
+KayKit : Prototype Bits (1.0) — Created/distributed by Kay Lousberg (www.kaylousberg.com)
+사용한 모델: Box_A, Box_B, Box_C, Pallet_Large (models/kaykit-*.glb)
+바꾼 것: glTF를 GLB 한 파일로 묶고, 색 그림(prototypebits_texture.png)을 1024px에서 128px로 줄임
+라이선스: Creative Commons Zero, CC0 — http://creativecommons.org/publicdomain/zero/1.0/
+원본: https://kaylousberg.itch.io/prototype-bits
+
+==============================================================================
 효과음 (Kenney) — CC0 1.0
 ==============================================================================
 효과음: Kenney (www.kenney.nl), CC0 1.0
